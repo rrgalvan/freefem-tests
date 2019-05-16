@@ -44,7 +44,7 @@ macro pos(u) (0.5*(abs(u)+u)) // Postivie part
   ; // for emacs
 macro neg(u) (0.5*(abs(u)-u)) // Negative part
   ; // for emacs
-macro intInteriorEdges(expr) ( intalledges(Th)((nTonEdge-1)*(expr)) ) // EOM
+macro intInteriorEdges(expr) ( intalledges(Th)((nTonEdge-1)*(expr)/nTonEdge) ) // EOM
   ; // for emacs
 //................................................................................
 
