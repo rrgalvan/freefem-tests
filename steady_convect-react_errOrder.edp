@@ -9,6 +9,16 @@
 //   * Then u(x,y) = exp( -A*( (x-x0)^2 + (y-y0)^2 ) )  is an exact solution of
 //     problem (P) with mu = 2*A and f(x,y) = -2*A(x*y0 - x0*y - 1)*u
 
+//
+// Global data
+//
+
+// Numerical approximation parameters
+real eta = 1;
+
+// For plotting
+real [int] viso=[-0.1,0,0.5,0.1,0.5,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.9,1];
+
 // Exact solution
 real A=10, x0=0.3, y0=0.3;
 real mu=2*A;
@@ -30,6 +40,11 @@ macro intInteriorEdges(expr) ( intalledges(Th)( (expr) * (nTonEdge-1)/nTonEdge) 
   ; // for emacs
 //................................................................................
 
+
+//
+// Actual function for solving problem
+//
+
 func int solvePDE( int nx ) {
   // Solve PDE in a mesh discretized by nx boundary intervals
 
@@ -43,12 +58,8 @@ func int solvePDE( int nx ) {
   macro b() [b1, b2] // EOM
     ; // emacs
 
-  // Numerical approximation parameters
-  real eta = 1;
-
   // Plot exact solution...
   u = uExac;
-  real [int] viso=[-0.1,0,0.5,0.1,0.5,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.9,1];
   plot(u, fill=1, wait=1, // viso=viso,
        cmm="Exact solution");
 
