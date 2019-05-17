@@ -12,7 +12,7 @@
 
 // Mesh and finite element spaces
 border Gamma(t=0, 2*pi) { x=cos(t);  y=sin(t); };
-mesh Th = buildmesh(Gamma(280));
+mesh Th = buildmesh(Gamma(350));
 
 fespace Uh(Th, P1dc);
 Uh u, ub; // Unknown and test function
@@ -27,6 +27,7 @@ func f = -2*A*(x*y0 - x0*y - 1)*uExac(x,y);
 
 // Numerical approximation parameters
 real eta = 1;
+real normaLinfgradb = 1;
 
 // Plot exact solution...
 u = uExac;
@@ -87,6 +88,8 @@ plot(u, fill=1, wait=1, value=1, viso=viso, cmm="Approximate solution CF");
 ub = u - uExac;
 real errL2CF = sqrt(int2d(Th)(ub*ub));
 cout << "errL12 CF = " << errL2CF << endl;
+real errCF = sqrt(max(2*A,normaLinfgradb) * errL2CF^2 + 0.5 * int1d(Th,Gamma)(abs(dotN(b)) * ub^2));
+cout << "errCF = " << errCF << endl;
 
 // Solve problem with upwind fluxes
 ConvectReactUPW;
@@ -94,4 +97,6 @@ plot(u, fill=1, wait=1, value=1, viso=viso, cmm="Approximate solution UPW");
 ub = u - uExac;
 real errL2UPW = sqrt(int2d(Th)(ub*ub));
 cout << "errL12 UPW = " << errL2UPW << endl;
+real errUPW = sqrt(max(2*A,normaLinfgradb) * int2d(Th)(ub*ub) + 0.5 * int1d(Th,Gamma)(abs(dotN(b)) * ub^2) + eta/2 * intInteriorEdges(abs(dotN(b))*(-jump(ub))^2));
+cout << "errUPW = " << errUPW << endl;
 // plot(ub, fill=1, wait=1, value=1, viso=viso, cmm="Error");
