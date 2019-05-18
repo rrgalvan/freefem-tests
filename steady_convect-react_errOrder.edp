@@ -12,18 +12,29 @@
 //
 // Global data
 //
-
-// Numerical approximation parameters
-real eta = 1;
-
-// For plotting
-real [int] viso=[-0.1,0,0.5,0.1,0.5,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.9,1];
+verbosity=0; // Do not let FreeFem++ show verbose info
 
 // Exact solution
 real A=10, x0=0.3, y0=0.3;
 real mu=2*A;
 func uExac = exp( -A*( (x-x0)^2 + (y-y0)^2 ) );
 func f = -2*A*(x*y0 - x0*y - 1)*uExac(x,y);
+
+// Errors
+real errL2CF, errL2CFold, errL2UPW, errL2UPWold;
+bool computeOrder=false; // Do not compute orders at first iteration
+bool saveErrors=true;
+ofstream fErrorCF("erroresCF.txt");
+ofstream fErrorUPW("erroresUPW.txt");
+
+// Numerical approximation parameters
+real eta = 1;
+
+// For plotting
+load "iovtk";
+int [int] vtkOrder = [1];
+string vtkBaseFile = "output_steady_convect_react";
+real [int] viso=[-0.1,0,0.5,0.1,0.5,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.9,1];
 
 // Macros..........................................................................
 macro grad(u) [dx(u), dy(u) ] // EOM
@@ -46,6 +57,7 @@ macro intInteriorEdges(expr) ( intalledges(Th)( (expr) * (nTonEdge-1)/nTonEdge) 
 //
 
 func int solvePDE( int nx ) {
+
   // Solve PDE in a mesh discretized by nx boundary intervals
 
   // Mesh and finite element spaces
@@ -59,10 +71,10 @@ func int solvePDE( int nx ) {
     ; // emacs
 
   // Plot exact solution...
-  u = uExac;
-  plot(u, fill=1, wait=1, // viso=viso,
+  Uh uEX;
+  uEX = uExac;
+  plot(uEX, fill=1, wait=1, // viso=viso,
        cmm="Exact solution");
-
 
   // ------------------------------------------------------------------------------------
   // Centered fluxes approximation
@@ -97,28 +109,54 @@ func int solvePDE( int nx ) {
   //   - int2d(Th)(f*ub);
 
   // Solve problem with centered fluxes
+  //-----------------------------------
   ConvectReactCF;
   plot(u, fill=1, wait=1, value=1, dim=3, // viso=viso,
        cmm="Approximate solution CF");
   ub = u - uExac;
-  real errL2CF = sqrt(int2d(Th)(ub*ub));
+  errL2CF = sqrt(int2d(Th)(ub*ub));
   cout << "errL12_CF  = " << errL2CF << endl;
+  fErrorCF << "errL12_CF, n=" << nx << ": " << errL2CF << endl;
+  Uh uCF;
+  uCF = u; // Save for future save to VTK
+
+  if(computeOrder) {
+    real orderCF = log(errL2CFold/errL2CF)/log(2.); // log_2( e_h / e_(h/2) )
+    cout << " Order_CF  = " << orderCF << endl;
+  }
+  errL2CFold = errL2CF;
 
   // Solve problem with upwind fluxes
+  //-----------------------------------
   ConvectReactUPW;
   plot(u, fill=1, wait=1, value=1, dim=3, // viso=viso,
        cmm="Approximate solution UPW");
   ub = u - uExac;
   real errL2UPW = sqrt(int2d(Th)(ub*ub));
   cout << "errL12_UPW = " << errL2UPW << endl;
-  // plot(ub, fill=1, wait=1, value=1, viso=viso, cmm="Error");
+  fErrorUPW << "errL12_UPW, n=" << nx << ": " << errL2UPW << endl;
+
+  if(computeOrder) {
+    real orderUPW;
+    orderUPW = log(errL2UPWold/errL2UPW)/log(2.); // log_2( e_h / e_(h/2) )
+    cout << " Order_UPW = " << orderUPW << endl;
+  }
+  else computeOrder=true; // Compute orders from next itration
+  errL2UPWold = errL2UPW;
+
+  // Save to vtk for high quality plotting
+  //--------------------------------------
+  string vtkFileName = vtkBaseFile + "_n=" + nx + ".vtk";
+  savevtk(vtkFileName, Th, uEX, uCF, u, dataname="u_Exact, u_CF, u_UPW", order=vtkOrder);
 
 }
 
 // Main program
-int maxExp=8;
+int maxExp=9;
 for (int i=2; i<maxExp+1; i++) {
   int n=2^i;
+  cout << "------------------------------------------------------" << endl;
   cout << "Solving with_ n=" << n << endl;
+  cout << "------------------------------------------------------" << endl;
   solvePDE(n);
  }
