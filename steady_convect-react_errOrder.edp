@@ -29,6 +29,7 @@ ofstream fErrorUPW("erroresUPW.txt");
 
 // Numerical approximation parameters
 real eta = 1;
+real normaLinfgradb = 1;
 
 // For plotting
 load "iovtk";
@@ -114,9 +115,16 @@ func int solvePDE( int nx ) {
   plot(u, fill=1, wait=1, value=1, dim=3, // viso=viso,
        cmm="Approximate solution CF");
   ub = u - uExac;
-  errL2CF = sqrt(int2d(Th)(ub*ub));
+  real errL2CF = sqrt(int2d(Th)(ub*ub));
   cout << "errL12_CF  = " << errL2CF << endl;
+  real errCF = sqrt(max(2*A,normaLinfgradb) * errL2CF^2 + 0.5 * int1d(Th,Gamma)(abs(dotN(b)) * ub^2));
+  cout << "errCF = " << errCF << endl;
+
+  if(saveErrors){
   fErrorCF << "errL12_CF, n=" << nx << ": " << errL2CF << endl;
+  fErrorCF << "errCF, n=" << nx << ":" << errCF << endl;
+  }
+
   Uh uCF;
   uCF = u; // Save for future save to VTK
 
@@ -134,14 +142,20 @@ func int solvePDE( int nx ) {
   ub = u - uExac;
   real errL2UPW = sqrt(int2d(Th)(ub*ub));
   cout << "errL12_UPW = " << errL2UPW << endl;
+  real errUPW = sqrt(max(2*A,normaLinfgradb) * int2d(Th)(ub*ub) + 0.5 * int1d(Th,Gamma)(abs(dotN(b)) * ub^2) + eta/2 * intInteriorEdges(abs(dotN(b))*(-jump(ub))^2));
+  cout << "errUPW = " << errUPW << endl;
+
+  if(saveErrors){
   fErrorUPW << "errL12_UPW, n=" << nx << ": " << errL2UPW << endl;
+  fErrorUPW << "errUPW, n=" << nx << ":" << errUPW << endl;
+  }
 
   if(computeOrder) {
     real orderUPW;
     orderUPW = log(errL2UPWold/errL2UPW)/log(2.); // log_2( e_h / e_(h/2) )
     cout << " Order_UPW = " << orderUPW << endl;
   }
-  else computeOrder=true; // Compute orders from next itration
+  else computeOrder=true; // Compute orders from next iteration
   errL2UPWold = errL2UPW;
 
   // Save to vtk for high quality plotting
