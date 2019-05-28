@@ -1,0 +1,124 @@
+// Problem (P):
+// b \cdot \grad u + \mu \cdot u = f   en \Omega,
+// u = 0   sobre \partial\Omega^- = \{ x \in \partial\Omega, b(x)\cdot n(x) <0 \}
+//
+// We take:
+//   * \Omega= unit circle,
+//   * b(x1,x2) = [x2, -x1], then \Omega^- = empty
+//   * mu = 2A, A=10, x0=0.3, y0=0.3 (e.g.)
+//   * Then u(x,y) = exp( -A*( (x-x0)^2 + (y-y0)^2 ) )  is an exact solution of
+//     problem (P) with mu = 2*A and f(x,y) = -2*A(x*y0 - x0*y - 1)*u
+verbosity=0;
+load "iovtk";
+
+
+//,---------------------------------------------------------------------
+//| Mesh and finite elements
+//`---------------------------------------------------------------------
+border Gamma(t=0, 2*pi) { x=cos(t);  y=sin(t); };
+int nx = 50;
+mesh Th = buildmesh(Gamma(nx));
+
+fespace Uh(Th, P1dc);
+Uh u, ub; // Unknown and test function
+Uh u0;
+Uh b1 = y, b2 = -x;
+macro b() [b1, b2] // EOM
+  ;
+
+//,---------------------------------------------------------------------
+//| Time parameters
+//`---------------------------------------------------------------------
+real t = 0;
+int niter = 200;
+real dt = 1.e-1;
+
+
+//,---------------------------------------------------------------------
+//| Problem data
+//`---------------------------------------------------------------------
+
+real diffusionCoeff = .001;
+real penaSIP = 4; // SIP DG interior penalty parameter
+
+real A=10, x0=0.3, y0=0.3;
+real mu=2*A;
+func initialU = exp( -A*( (x-x0)^2 + (y-y0)^2 ) );
+u0 = initialU;
+
+real integralU0=int2d(Th)(u0);
+cout <<"La integral del dato inicial es "<< integralU0 << endl;
+
+
+//,---------------------------------------------------------------------
+//| Variational problems
+//`---------------------------------------------------------------------
+
+// Macros..............................................................>
+macro grad(u) [ dx(u), dy(u) ] // End of Macro
+  ; // for emacs :)
+macro div(u,v) ( dx(u) + dy(v) ) // End of Macro
+  ; // for emacs :)
+macro dn(u) ( N.x*dx(u) + N.y*dy(u) ) //  Normal derivative
+  ; // for emacs :)
+macro dotN(v) ( N.x*v[0] + N.y*v[1]) // (v1,v2) * (Normal Vector)
+  ; // for emacs
+macro intInteriorEdges(Th, expr) ( intalledges(Th)( real(nTonEdge-1)/nTonEdge * (expr) ) ) // EOM
+  ; // for emacs
+
+// Diffusion term (without Dirichlet b.c.) using SIP DG
+NewMacro aSIP(coeff, u, ub)
+  (
+   int2d(Th)( coeff * grad(u)'*grad(ub) )  // Diffusion
+   - intInteriorEdges(Th, coeff * (
+				   mean(dn(u))*(-jump(ub))  +
+				   (-jump(u))*mean(dn(ub))
+				   ) )
+   + intInteriorEdges(Th, coeff *
+		      penaSIP/lenEdge * jump(u)*jump(ub) )
+   ) EndMacro;
+
+// Upwind convection
+NewMacro aUPW(coeff, u, b, ub)
+  (
+   int2d(Th)( coeff * b'*grad(u) * ub )
+   + intInteriorEdges(Th,
+		      coeff * (
+			       - dotN(b) * (-jump(u)) * mean(ub)
+			       + 0.5*abs(dotN(b)) * jump(u)*jump(ub)
+			       ) )
+   ) EndMacro;
+;
+
+// ....................................................................>
+
+problem ConvectionDiffusionDG(u,ub) =
+  int2d(Th) (u*ub/dt)
+  + aUPW(1, u, b, ub)
+  + aSIP(diffusionCoeff, u, ub)
+  - int2d(Th)(u0*ub/dt);
+
+
+//,---------------------------------------------------------------------
+//| Time loop
+//`---------------------------------------------------------------------
+
+for (int k=1; k<=niter; k++){
+  t=t+dt;
+  cout << "iter = " << k << "\t (t = " << t << ")" << endl;
+
+  ConvectionDiffusionDG;
+
+  cout << "  max(u) = " << u[].max << "  min(u) = " << u[].min << endl;
+  cout << "  int_Th(u) = " << int2d(Th)(u) << endl;
+
+  u0 = u;  // Prepare next iteration
+
+  plot(u, value=1, fill=1, dim=3);
+
+  string vtkFile="/tmp/conv_diff_" + k + ".vtk";
+  int[int] vtkOrder=[0];
+  savevtk(vtkFile, Th, u, dataname="u", order=vtkOrder);
+
+
+ }
