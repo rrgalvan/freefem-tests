@@ -16,7 +16,7 @@ load "iovtk";
 //| Mesh and finite elements
 //`---------------------------------------------------------------------
 border Gamma(t=0, 2*pi) { x=cos(t);  y=sin(t); };
-int nx = 50;
+int nx = 100;
 mesh Th = buildmesh(Gamma(nx));
 
 fespace Uh(Th, P1dc);
@@ -38,13 +38,14 @@ real dt = 1.e-1;
 //| Problem data
 //`---------------------------------------------------------------------
 
-real diffusionCoeff = .001;
+real diffusionCoeff = .000;
 real penaSIP = 4; // SIP DG interior penalty parameter
 
 real A=10, x0=0.3, y0=0.3;
 real mu=2*A;
-func initialU = exp( -A*( (x-x0)^2 + (y-y0)^2 ) );
-u0 = initialU;
+func initialUGaussian = exp( -A*( (x-x0)^2 + (y-y0)^2 ) );
+func initialURiemann = x<0;
+u0 = initialUGaussian;
 
 real integralU0=int2d(Th)(u0);
 cout <<"La integral del dato inicial es "<< integralU0 << endl;
@@ -70,34 +71,42 @@ macro intInteriorEdges(Th, expr) ( intalledges(Th)( real(nTonEdge-1)/nTonEdge * 
 NewMacro aSIP(coeff, u, ub)
   (
    int2d(Th)( coeff * grad(u)'*grad(ub) )  // Diffusion
-   - intInteriorEdges(Th, coeff * (
+   - intInteriorEdges(Th, (coeff) * (
 				   mean(dn(u))*(-jump(ub))  +
 				   (-jump(u))*mean(dn(ub))
 				   ) )
-   + intInteriorEdges(Th, coeff *
+   + intInteriorEdges(Th, (coeff) *
 		      penaSIP/lenEdge * jump(u)*jump(ub) )
    ) EndMacro;
 
 // Upwind convection
-NewMacro aUPW(coeff, u, b, ub)
+NewMacro aUPW(b, u, ub)
   (
-   int2d(Th)( coeff * b'*grad(u) * ub )
+   int2d(Th)( b'*grad(u) * ub )
    + intInteriorEdges(Th,
-		      coeff * (
-			       - dotN(b) * (-jump(u)) * mean(ub)
-			       + 0.5*abs(dotN(b)) * jump(u)*jump(ub)
-			       ) )
+		       (
+			- dotN(b) * (-jump(u)) * mean(ub)
+			+ 0.5*abs(dotN(b)) * jump(u)*jump(ub)
+			) )
    ) EndMacro;
 ;
 
 // ....................................................................>
 
-problem ConvectionDiffusionDG(u,ub) =
+problem ConvectDiffImplicitEulerDG(u,ub) =
   int2d(Th) (u*ub/dt)
-  + aUPW(1, u, b, ub)
+  + aUPW(b, u, ub)
   + aSIP(diffusionCoeff, u, ub)
   - int2d(Th)(u0*ub/dt);
 
+real theta=0.5;
+problem ConvectDiffThetaSchemeDG(u,ub) =
+  int2d(Th) (u*ub/dt)
+  + aUPW( theta*b, u, ub )
+  + aUPW( (1-theta)*b, u0, ub )
+  + aSIP( theta*diffusionCoeff, u, ub )
+  + aSIP( (1-theta)*diffusionCoeff, u0, ub )
+  - int2d(Th)(u0*ub/dt);
 
 //,---------------------------------------------------------------------
 //| Time loop
@@ -107,7 +116,8 @@ for (int k=1; k<=niter; k++){
   t=t+dt;
   cout << "iter = " << k << "\t (t = " << t << ")" << endl;
 
-  ConvectionDiffusionDG;
+  // ConvectDiffThetaSchemeDG;
+  ConvectDiffImplicitEulerDG;
 
   cout << "  max(u) = " << u[].max << "  min(u) = " << u[].min << endl;
   cout << "  int_Th(u) = " << int2d(Th)(u) << endl;
