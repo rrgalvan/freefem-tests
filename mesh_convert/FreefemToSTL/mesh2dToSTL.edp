@@ -1,0 +1,57 @@
+// Parameters----------------------------------------------------------------------
+string STLfile = "/tmp/outputMesh.stl"; // Output STL file
+int outputPrecission=0; // If !=0, define number of precission digits
+bool saveScientific=false; // If true, save using scientific floatting point format
+string solidName=""; // Default name for the solid saved in the STL file
+// --------------------------------------------------------------------------------
+
+// Mesh ---------------------------------------------------------------------------
+border lxbottom(t=0,3) {x=t; y=0;}
+border lxtop0(t=0,1) {x=t; y=2;}
+border lxtop1(t=1,2) {x=t; y=1;}
+border lxtop2(t=2,3) {x=t; y=2;}
+border ly0(t=0,2) {x=0; y=t;}
+border ly1(t=1,2) {x=1; y=t;}
+border ly2(t=1,2) {x=2; y=t;}
+border ly3(t=0,2) {x=3; y=t;}
+
+int n=5;
+mesh Th=buildmesh(lxbottom(3*n) + ly3(2*n)
+		  + lxtop2(-1*n) + ly2(-1*n)
+		  + lxtop1(-1*n) + ly1(1*n)
+		  + lxtop0(-1*n) + ly0(-2*n) );
+solidName = "U_5";
+STLfile = solidName + ".stl";
+// --------------------------------------------------------------------------------
+
+macro saveFacet(fStream, u, v, w)
+{
+  fStream << "facet normal 0 0 1" << endl;
+  fStream << "  outer loop" << endl;
+  fStream << "    vertex " << u(0) << "\t" << u(1) << "\t" << u(2) << endl;
+  fStream << "    vertex " << v(0) << "\t" << v(1) << "\t" << v(2) << endl;
+  fStream << "    vertex " << w(0) << "\t" << w(1) << "\t" << w(2) << endl;
+  fStream << "  endloop" << endl;
+  fStream << "endfacet" << endl;
+} // EOM
+
+macro mesh2dToSTL(Th, filename, solidName)
+{
+  ofstream ofs(filename);
+  if(saveScientific)
+    ofs.scientific;
+  if(outputPrecission)
+    ofs.precision(outputPrecission);
+
+  ofs << "solid " << solidName << endl;
+  int nTriangles = Th.nt;
+  for (int i=0; i<nTriangles; i++) {
+    real[int] v1=[Th[i][0].x, Th[i][0].y, 0];
+    real[int] v2=[Th[i][1].x, Th[i][1].y, 0];
+    real[int] v3=[Th[i][2].x, Th[i][2].y, 0];
+    saveFacet(ofs, v1, v2, v3);
+  }
+  ofs << "endsolid " << solidName;
+} // EOM
+
+mesh2dToSTL(Th, STLfile, solidName);
