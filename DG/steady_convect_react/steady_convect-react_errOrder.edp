@@ -123,8 +123,8 @@ func int solvePDE( int nx ) {
   cout << "errCF = " << errCF << endl;
 
   if(saveErrors){
-  fErrorL2CF << " " << errL2CF;
-  fErrorCF << " " << errCF;
+  fErrorL2CF << errL2CF << endl;
+  fErrorCF  << errCF << endl;
   }
 
   Uh uCF;
@@ -148,8 +148,8 @@ func int solvePDE( int nx ) {
   cout << "errUPW = " << errUPW << endl;
 
   if(saveErrors){
-  fErrorL2UPW << " " << errL2CF;
-  fErrorUPW << " " << errCF;
+  fErrorL2UPW << errL2UPW << endl;
+  fErrorUPW << errUPW << endl;
   }
 
   if(computeOrder) {
