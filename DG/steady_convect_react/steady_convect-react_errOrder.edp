@@ -24,7 +24,9 @@ func f = -2*A*(x*y0 - x0*y - 1)*uExac(x,y);
 real errL2CF, errL2CFold, errL2UPW, errL2UPWold;
 bool computeOrder=false; // Do not compute orders at first iteration
 bool saveErrors=true;
+ofstream fErrorL2CF("erroresL2CF.txt");
 ofstream fErrorCF("erroresCF.txt");
+ofstream fErrorL2UPW("erroresL2UPW.txt");
 ofstream fErrorUPW("erroresUPW.txt");
 
 // Numerical approximation parameters
@@ -116,13 +118,13 @@ func int solvePDE( int nx ) {
        cmm="Approximate solution CF");
   ub = u - uExac;
   real errL2CF = sqrt(int2d(Th)(ub*ub));
-  cout << "errL12_CF  = " << errL2CF << endl;
+  cout << "errL2_CF  = " << errL2CF << endl;
   real errCF = sqrt(max(2*A,normaLinfgradb) * errL2CF^2 + 0.5 * int1d(Th,Gamma)(abs(dotN(b)) * ub^2));
   cout << "errCF = " << errCF << endl;
 
   if(saveErrors){
-  fErrorCF << "errL12_CF, n=" << nx << ": " << errL2CF << endl;
-  fErrorCF << "errCF, n=" << nx << ":" << errCF << endl;
+  fErrorL2CF << " " << errL2CF;
+  fErrorCF << " " << errCF;
   }
 
   Uh uCF;
@@ -141,13 +143,13 @@ func int solvePDE( int nx ) {
        cmm="Approximate solution UPW");
   ub = u - uExac;
   real errL2UPW = sqrt(int2d(Th)(ub*ub));
-  cout << "errL12_UPW = " << errL2UPW << endl;
+  cout << "errL2_UPW = " << errL2UPW << endl;
   real errUPW = sqrt(max(2*A,normaLinfgradb) * int2d(Th)(ub*ub) + 0.5 * int1d(Th,Gamma)(abs(dotN(b)) * ub^2) + eta/2 * intInteriorEdges(abs(dotN(b))*(-jump(ub))^2));
   cout << "errUPW = " << errUPW << endl;
 
   if(saveErrors){
-  fErrorUPW << "errL12_UPW, n=" << nx << ": " << errL2UPW << endl;
-  fErrorUPW << "errUPW, n=" << nx << ":" << errUPW << endl;
+  fErrorL2UPW << " " << errL2CF;
+  fErrorUPW << " " << errCF;
   }
 
   if(computeOrder) {
