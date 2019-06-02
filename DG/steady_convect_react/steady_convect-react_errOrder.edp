@@ -76,7 +76,7 @@ func int solvePDE( int nx ) {
   // Plot exact solution...
   Uh uEX;
   uEX = uExac;
-  plot(uEX, fill=1, wait=1, // viso=viso,
+  plot(uEX, fill=1, wait=1, value=1, dim=3, ShowAxes = 0, viso=viso,
        cmm="Exact solution");
 
   // ------------------------------------------------------------------------------------
@@ -114,7 +114,7 @@ func int solvePDE( int nx ) {
   // Solve problem with centered fluxes
   //-----------------------------------
   ConvectReactCF;
-  plot(u, fill=1, wait=1, value=1, dim=3, // viso=viso,
+  plot(u, fill=1, wait=1, value=1, dim=3, ShowAxes = 0, viso=viso,
        cmm="Approximate solution CF");
   ub = u - uExac;
   real errL2CF = sqrt(int2d(Th)(ub*ub));
@@ -142,8 +142,8 @@ func int solvePDE( int nx ) {
   // Solve problem with upwind fluxes
   //-----------------------------------
   ConvectReactUPW;
-  plot(u, fill=1, wait=1, value=1, dim=3, // viso=viso,
-       cmm="Approximate solution UPW");
+  plot(u, fill=1, wait=1, value=1, dim=3, ShowAxes = 0, viso=viso,
+       cmm="Approximate solution UPW", ps="PruebaP1dc.png");
   ub = u - uExac;
   real errL2UPW = sqrt(int2d(Th)(ub*ub));
   cout << "errL2_UPW = " << errL2UPW << endl;
@@ -173,8 +173,8 @@ func int solvePDE( int nx ) {
 }
 
 // Main program
-int maxExp=9;
-for (int i=2; i<maxExp+1; i++) {
+int maxExp=5;
+for (int i=5; i<maxExp+1; i++) {
   int n=2^i;
   cout << "------------------------------------------------------" << endl;
   cout << "Solving with_ n=" << n << endl;
