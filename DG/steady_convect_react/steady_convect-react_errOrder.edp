@@ -173,8 +173,8 @@ func int solvePDE( int nx ) {
 }
 
 // Main program
-int maxExp=5;
-for (int i=5; i<maxExp+1; i++) {
+int maxExp=9;
+for (int i=2; i<maxExp+1; i++) {
   int n=2^i;
   cout << "------------------------------------------------------" << endl;
   cout << "Solving with_ n=" << n << endl;
