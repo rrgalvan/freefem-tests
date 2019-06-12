@@ -1,0 +1,61 @@
+//,--------------------------------------------------------------------------
+//| Parallel computing the minimum of an array, using blocking syncronization
+//|
+//| Rafa Rodríguez Galván, 2019.
+//| Idea based on http://www.mathcs.emory.edu/~cheung/Courses/355/Syllabus/92-MPI/async.html
+//`--------------------------------------------------------------------------
+
+verbosity=1;
+macro vout() if(verbosity>0) cout // EOM
+
+// 1. Definition of data (just for testing)
+int MAX=100000000;
+real[int] v=1:MAX;
+v=sin(v);
+
+// vout << "Starting, mpirank=" << mpirank << "\t / mpisize=" << mpisize << endl;
+
+int n = MAX/mpisize;
+int start = mpirank * n;
+int stop;
+if ( mpirank != (mpisize-1) )
+  {
+    stop = start + n;
+  }
+ else
+   {
+     stop = MAX;
+   }
+
+// Find the min. among my numbers
+
+real myMin = v[start];
+for (int i = start+1; i < stop; i++ )
+  {
+    if (v[i] < myMin) myMin = v[i];
+  }
+
+real othersMin;
+if ( mpirank == 0 )
+  {
+    /* -------------------------------------
+       Get the min from others and compare
+       ------------------------------------- */
+    for (int i = 1; i < mpirank; i++)
+      {
+	Recv(processor(i), othersMin);
+	if ( othersMin < myMin ) myMin = othersMin;
+      }
+  }
+ else
+   {
+     Send(processor(0), myMin);
+   }
+
+// <-- Syncronization point (because of blocking send/reciev)
+
+if (mpirank==0) {
+  cout << "Min=" << myMin << endl;
+ }
+
+// mpiBarrier(mpiCommWorld);

@@ -1,0 +1,82 @@
+//,--------------------------------------------------------------------------
+//| Parallel computing the minimum of an array, using blocking syncronization
+//|
+//| Rafa Rodríguez Galván, 2019.
+//| Idea based on http://www.mathcs.emory.edu/~cheung/Courses/355/Syllabus/92-MPI/async.html
+//`--------------------------------------------------------------------------
+
+verbosity=1;
+macro vout() if(verbosity>0) cout // EOM
+
+// 1. Definition of data (just for testing)
+int MAX=20000000;
+real[int] v=1:MAX;
+v=sin(v);
+
+// vout << "Starting, mpirank=" << mpirank << " / mpisize=" << mpisize << endl;
+
+int n = MAX/mpisize;
+int start = mpirank * n;
+int stop;
+if ( mpirank != (mpisize-1) )
+  {
+    stop = start + n;
+  }
+ else
+   {
+     stop = MAX;
+   }
+
+// Find the min. among my numbers
+
+real myMin = v[start];
+for (int i = start+1; i < stop; i++ )
+  {
+    if (v[i] < myMin) myMin = v[i];
+  }
+
+int MAXPROC=32; // Maximum number of processes used
+real[int] othersMin(MAXPROC); // <- Save minimum separately
+mpiRequest[int] rqMin(MAXPROC);
+
+if ( mpirank == 0 )
+  {
+    /* -------------------------------------
+       Get the min from others and compare
+       ------------------------------------- */
+    for (int i = 1; i < mpirank; i++)
+      {
+	Recv(processor(i,rqMin[i]), othersMin[i]);
+      }
+  }
+ else
+   {
+     Send(processor(0,rqMin[0]), myMin);
+   }
+
+// <-- No syncronization point here (because of nonblocking send/reciev)
+
+// Hence, whe must syncronize, gatherering results computed for each processor
+
+if ( mpirank == 0 )
+  {  // The Master processor waits for all min[] messages to arrive
+    for (int i = 1; i < mpisize; i++)
+      {
+	int k = mpiWaitAny(rqMin);
+	// mpiWait( rqMin[i] ); // Otra posibilida, menos eficiente
+
+	if(othersMin[i] < myMin) myMin = othersMin[i];
+      }
+  }
+ else
+   { // The other processes must wait until their messages
+     // has been received before exiting !!!
+     mpiWait( rqMin[0] );
+   }
+
+// The end
+if (mpirank==0) {
+  cout << endl << "Min=" << myMin << endl << endl;
+ }
+
+// mpiBarrier(mpiCommWorld);

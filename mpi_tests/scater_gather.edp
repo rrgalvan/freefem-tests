@@ -1,0 +1,62 @@
+//,--------------------------------------------------------------------------
+//| Parallel sum, using MPI Scater/Gather
+//|
+//| Rafa Rodríguez Galván, 2019.
+//| Idea based on http://www.mathcs.emory.edu/~cheung/Courses/355/Syllabus/92-MPI/async.html
+//`--------------------------------------------------------------------------
+
+verbosity=1;
+macro vout() if(verbosity) cout // EOM
+			       ; // for emacs ;)
+macro mout() if(mpirank==0 && verbosity) cout // EOM
+			       ; // for emacs ;)
+mout << "WE have " << mpisize << " processors" << endl;
+
+// 1. Definition of data (just for testing)
+int MAX=100; // Maximum amount of data
+real[int] buff(MAX);
+int NDATA=5; // Number of data sent to each procesor
+real[int] recvbuff(NDATA);
+
+if (mpirank == 0)
+  {
+    // -----------------------------------------------
+    // Node 0 prepare 2 number for each processor
+    //     [1][2]  [3][4]  [5][6] .... etc
+    // -----------------------------------------------
+    int k = 1;
+    for ( int i = 0; i < NDATA*mpisize; i+=NDATA  )
+      {
+	for( int j = 0; j < NDATA; j++ )
+	  {
+	    buff[i+j] = k++; // buff[] = {1,2,3...}
+	  }
+      }
+    cout << buff << endl;
+  }
+
+// ------------------------------------------
+// Node 0 scatter the array to the processors:
+// ------------------------------------------
+
+mpiScatter (buff, recvbuff, processor(0,mpiCommWorld));
+
+real mysum = recvbuff.sum;  // Everyone calculates the sum
+
+// ------------------------------------------
+// Node 0 collects the results in "buff":
+// ------------------------------------------
+
+mpiGather (mysum, buff, processor(0,mpiCommWorld));
+
+// ------------------------------------------
+// Node 0 prints result
+// ------------------------------------------
+if (mpirank == 0)
+  {
+    for(int i = 0; i < mpisize; i++)
+      {
+	vout << "Processor " << i << ": sum = " << buff[i] << endl;
+      }
+    vout << endl << "Total sum = " << buff(0:mpisize-1).sum << endl << endl;
+  }
