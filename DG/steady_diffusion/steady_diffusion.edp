@@ -80,7 +80,7 @@ func int solvePDE( int nx ) {
   problem DiffusionSIP(u,ub)=
     int2d(Th)( dot(grad(u), grad(ub)) ) - intAllEdges( mean(dotN(grad(u))) * (-jump(ub)) // Diffusion term
 	                                           + mean(dotN(grad(ub))) * (-jump(u)) ) // Symmetry term
-    + intAllEdges( Sigma * nx * jump(u) * jump(ub) ) //
+    + intAllEdges( Sigma / lenEdge * jump(u) * jump(ub) ) //
     - int2d(Th)( f(x,y) * ub );
   // ------------------------------------------------------------------------------------
 
