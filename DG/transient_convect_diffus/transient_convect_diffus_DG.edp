@@ -40,6 +40,7 @@ real dt = 1.e-1;
 
 real diffusionCoeff = .000;
 real penaSIP = 4; // SIP DG interior penalty parameter
+real eta = 1; // UPW parameter
 
 real A=10, x0=0.3, y0=0.3;
 real mu=2*A;
@@ -66,17 +67,20 @@ macro dotN(v) ( N.x*v[0] + N.y*v[1]) // (v1,v2) * (Normal Vector)
   ; // for emacs
 macro intInteriorEdges(Th, expr) ( intalledges(Th)( real(nTonEdge-1)/nTonEdge * (expr) ) ) // EOM
   ; // for emacs
+macro intAllEdges(Th, expr) ( intalledges(Th)( (expr) * 1/nTonEdge) ) // EOM
+  ; // for emacs
 
 // Diffusion term (without Dirichlet b.c.) using SIP DG
 NewMacro aSIP(coeff, u, ub)
   (
    int2d(Th)( coeff * grad(u)'*grad(ub) )  // Diffusion
-   - intInteriorEdges(Th, (coeff) * (
+   - intAllEdges(Th, (coeff) * (
 				   mean(dn(u))*(-jump(ub))  +
 				   (-jump(u))*mean(dn(ub))
-				   ) )
-   + intInteriorEdges(Th, (coeff) *
-		      penaSIP/lenEdge * jump(u)*jump(ub) )
+				    ) )
+   + intAllEdges(Th, (coeff) * (
+		      penaSIP/lenEdge * jump(u)*jump(ub)
+				) )
    ) EndMacro;
 
 // Upwind convection
@@ -86,11 +90,10 @@ NewMacro aUPW(b, u, ub)
    + intInteriorEdges(Th,
 		       (
 			- dotN(b) * (-jump(u)) * mean(ub)
-			+ 0.5*abs(dotN(b)) * jump(u)*jump(ub)
+			+ eta/2 *abs(dotN(b)) * jump(u)*jump(ub)
 			) )
    ) EndMacro;
 ;
-
 // ....................................................................>
 
 problem ConvectDiffImplicitEulerDG(u,ub) =
@@ -128,7 +131,7 @@ for (int k=1; k<=niter; k++){
 
   string vtkFile="/tmp/conv_diff_" + k + ".vtk";
   int[int] vtkOrder=[0];
-  savevtk(vtkFile, Th, u, dataname="u", order=vtkOrder);
+  //savevtk(vtkFile, Th, u, dataname="u", order=vtkOrder);
 
 
  }
