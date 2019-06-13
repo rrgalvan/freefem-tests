@@ -102,7 +102,7 @@ problem ConvectDiffImplicitEulerDG(u,ub) =
   + aSIP(diffusionCoeff, u, ub)
   - int2d(Th)(u0*ub/dt);
 
-real theta=0.5;
+real theta; // if theta=0.5: Crank-Nicholson
 problem ConvectDiffThetaSchemeDG(u,ub) =
   int2d(Th) (u*ub/dt)
   + aUPW( theta*b, u, ub )
@@ -119,8 +119,9 @@ for (int k=1; k<=niter; k++){
   t=t+dt;
   cout << "iter = " << k << "\t (t = " << t << ")" << endl;
 
-  // ConvectDiffThetaSchemeDG;
-  ConvectDiffImplicitEulerDG;
+  theta = 0.5; // Crank-Nicholson
+  ConvectDiffThetaSchemeDG;
+  // ConvectDiffImplicitEulerDG;
 
   cout << "  max(u) = " << u[].max << "  min(u) = " << u[].min << endl;
   cout << "  int_Th(u) = " << int2d(Th)(u) << endl;
