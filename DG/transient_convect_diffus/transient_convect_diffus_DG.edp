@@ -74,11 +74,11 @@ macro intAllEdges(Th, expr) ( intalledges(Th)( (expr) * 1/nTonEdge) ) // EOM
 NewMacro aSIP(coeff, u, ub)
   (
    int2d(Th)( coeff * grad(u)'*grad(ub) )  // Diffusion
-   - intAllEdges(Th, (coeff) * (
+   - intInteriorEdges(Th, (coeff) * (
 				   mean(dn(u))*(-jump(ub))  +
 				   (-jump(u))*mean(dn(ub))
 				    ) )
-   + intAllEdges(Th, (coeff) * (
+   + intInteriorEdges(Th, (coeff) * (
 		      penaSIP/lenEdge * jump(u)*jump(ub)
 				) )
    ) EndMacro;
