@@ -21,7 +21,7 @@ real[int] recvbuff(NDATA);
 if (mpirank == 0)
   {
     // -----------------------------------------------
-    // Node 0 prepare 2 number for each processor
+    // Node 0 prepare 2 numbers for each processor
     //     [1][2]  [3][4]  [5][6] .... etc
     // -----------------------------------------------
     int k = 1;
