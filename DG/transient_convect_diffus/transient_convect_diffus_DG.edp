@@ -1,13 +1,13 @@
 // Problem (P):
-// b \cdot \grad u + \mu \cdot u = f   en \Omega,
-// u = 0   sobre \partial\Omega^- = \{ x \in \partial\Omega, b(x)\cdot n(x) <0 \}
+// u_t - \mu \Delta u + b \cdot \grad u = 0   en \Omega,
+// u = 0   sobre \partial\Omega x (0,t_f)
+// u(\cdot,0)=u0 sobre \Omega
 //
 // We take:
 //   * \Omega= unit circle,
-//   * b(x1,x2) = [x2, -x1], then \Omega^- = empty
-//   * mu = 2A, A=10, x0=0.3, y0=0.3 (e.g.)
-//   * Then u(x,y) = exp( -A*( (x-x0)^2 + (y-y0)^2 ) )  is an exact solution of
-//     problem (P) with mu = 2*A and f(x,y) = -2*A(x*y0 - x0*y - 1)*u
+//   * b(x1,x2) = [x2, -x1]
+//   *  A=10, x0=0.3, y0=0.3 (e.g.)
+//   * Initial condition u0 = exp( -A*( (x-x0)^2 + (y-y0)^2 ) )
 verbosity=0;
 load "iovtk";
 
