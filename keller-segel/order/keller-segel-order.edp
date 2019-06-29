@@ -1,4 +1,4 @@
-// Keller-Segel Italy-Spanish project
+// Keller-Segel Italy-Spain project
 
 //load "iovtk";
 include "getARGV.idp";
@@ -27,6 +27,7 @@ real dt = getARGV("-dt", 4.e-2); // Time step
 // Error order parameters
 int nOrderSteps=2;
 real[int] uL2Error(nOrderSteps);
+real[int] vL2Error(nOrderSteps);
 
 // Keller-Segel data
 real k0 = getARGV("-k0", 1.0); // u diffusion coefficient
@@ -38,18 +39,23 @@ real k4 = getARGV("-k4", 1.0); // v -u reaction coeff
 if(verbosity) cout << "Keller-Segel coefficients: k0=" << k0 << ", k1=" << k1
 		   << ", k2=" << k2 << ", k3=" << k3 << ", k4=" << k4 << endl;
 
-
-func real uExact(real t) {
-  return  2 + exp(-2*t)*cos(x)*cos(y);
-}
-func real vExact(real t) {
-  return uExact(t);
-}
-func real f(real t) {
-  return -k1*( 4*cos(x)*cos(y) * ( exp(2*t) + cos(x)*cos(y) )
+func uExact = 2 + exp(-2*t)*cos(x)*cos(y);
+func vExact = uExact;
+func f = -k1*( 4*cos(x)*cos(y) * ( exp(2*t) + cos(x)*cos(y) )
 	    - square(cos(x)) - square(cos(y))
 	    ) * exp(-4*t);
-}
+
+// func real uExact(real t) {
+//   return  2 + exp(-2*t)*cos(x)*cos(y);
+// }
+// func real vExact(real t) {
+//   return uExact(t);
+// }
+// func real f(real t) {
+//   return -k1*( 4*cos(x)*cos(y) * ( exp(2*t) + cos(x)*cos(y) )
+// 	    - square(cos(x)) - square(cos(y))
+// 	    ) * exp(-4*t);
+// }
 
 // Variational problem (Euler time scheme)
 
@@ -58,7 +64,7 @@ problem uKellerSegelEuler(u,bu)=
 	     u*bu/dt
 	     + grad(u)'*grad(bu) + k1*u*grad(v)'*grad(bu) )
   - int2d(Th)(
-	      u0*bu/dt + f(t)*bu
+	      u0*bu/dt + f*bu
 	      );
 
 problem vKellerSegelEuler(v,bv) =
@@ -115,17 +121,20 @@ NewMacro solveKS(iOrder, dt, nt)
    cout << "---------------------------------------------------------" << endl;
 
    // Calculo de errores ...............
-   real uErrorL2L2square = 0; // ( || u - uExact ||_L2(L2) )^2
+   real uErrorL2L2sq = 0; // ( || u - uExact ||_L2(L2) )^2
+   real vErrorL2L2sq = 0; // ( || v - vExact ||_L2(L2) )^2
 
-   real uErrorL2square = int2d(Th)( square(u0-uExact(0)) );
-   cout << "  error_L2 ^2 : " << uErrorL2square << endl;
+   real uErrorL2sq = int2d(Th)( square(u0-uExact) ); // Square of error at initial time
+   real vErrorL2sq = int2d(Th)( square(v0-vExact) ); // Square of error at initial time
+   cout << "  u_error_L2 ^2 : " << uErrorL2sq << endl;
+   cout << "  v_error_L2 ^2 : " << vErrorL2sq << endl;
 
    for (int k=1; k<=nt; k++){
 
      if(textVerbosity>0) cout << "Solving, iter: " << k << " (t=" << t << ")" << endl;
-     fh0 = f(t);
+     fh0 = f;
      t=t+dt;
-     fh1 = f(t);
+     fh1 = f;
 
      // ecCalor;
      vKellerSegelCN;
@@ -136,20 +145,23 @@ NewMacro solveKS(iOrder, dt, nt)
      v0 = v;  // For next iteration
 
      // Calculo de errores ...............
-     real uErrorL2square = int2d(Th)( square(u-uExact(t)) );
-     cout << "  error_L2 ^2 : " << uErrorL2square << endl;
-     uErrorL2L2square += uErrorL2square;
+     real uErrorL2sq = int2d(Th)( square(u-uExact) ); // Square of L2 error for u
+     real vErrorL2sq = int2d(Th)( square(v-vExact) ); // Square of L2 error for v
+     cout << "  u_error_L2 ^2 : " << uErrorL2sq << endl;
+     cout << "  v_error_L2 ^2 : " << vErrorL2sq << endl;
+     uErrorL2L2sq += uErrorL2sq;
+     vErrorL2L2sq += vErrorL2sq;
 
      // Cálculo de max/min ...............
-     cout << "  max(u): " << u[].max << ", ";
-     cout << "  min(u): " << u[].max << endl;
+     cout << "    max(u): " << u[].max << ", ";
+     cout << "    min(u): " << u[].max << endl;
 
-     cout << "  max(v): " << v[].max << ", ";
-     cout << "  min(v): " << v[].max << endl;
+     cout << "    max(v): " << v[].max << ", ";
+     cout << "    min(v): " << v[].max << endl;
 
      bool printUint = true; if (printUint) {
        real uInt = int2d(Th)(u);
-       cout << "  int(u): " << uInt << endl;
+       cout << "    int(u): " << uInt << endl;
      }
 
      // real fInt = int2d(Th)(f);
@@ -161,10 +173,13 @@ NewMacro solveKS(iOrder, dt, nt)
      plot(u, value=1, fill=1, dim=3);
 
    }
-   uL2Error[iOrder] = sqrt(dt*uErrorL2L2square);
-   cout << "error_L2_L2 : " << uL2Error[iOrder] << endl;
+   uL2Error[iOrder] = sqrt(dt*uErrorL2L2sq);
+   vL2Error[iOrder] = sqrt(dt*vErrorL2L2sq);
+   cout << "u_error_L2_L2 : " << uL2Error[iOrder] << endl;
+   cout << "v_error_L2_L2 : " << vL2Error[iOrder] << endl;
    if(iOrder>0) {
-     cout << "Order: " << log(uL2Error[iOrder-1]/uL2Error[iOrder])/log(2.0) << endl;
+     cout << "Order for ||u||_L2L2: " << log(uL2Error[iOrder-1]/uL2Error[iOrder])/log(2.0) << endl;
+     cout << "Order for ||v||_L2L2: " << log(vL2Error[iOrder-1]/vL2Error[iOrder])/log(2.0) << endl;
    }
    }
   EndMacro;
@@ -173,10 +188,12 @@ NewMacro solveKS(iOrder, dt, nt)
 
 for(int iOrder=0; iOrder<nOrderSteps; iOrder++) {
   t = 0;
-  u0 = uExact(0); // Proyection of uExact at t=0
-  v0 = vExact(0); // Proyection of vExact at t=0
+  u0 = uExact; // Proyection of uExact at t=0
+  v0 = vExact; // Proyection of vExact at t=0
 
   solveKS(iOrder, dt, nt);
+
+  // Prepare next iteration
   dt = dt/2;
   nt = 2*nt;
  }
