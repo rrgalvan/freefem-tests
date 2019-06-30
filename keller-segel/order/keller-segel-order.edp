@@ -7,7 +7,7 @@ verbosity = getARGV("-verb", 0);
 int textVerbosity = 1;
 
 // Mesh and finite element spaces
-int nx = getARGV("-nx",100); // Number of mesh subdivisions
+int nx = getARGV("-nx",50); // Number of mesh subdivisions
 mesh Th = square(nx, nx, [pi*x, pi*y]);
 
 plot(Th, wait=1);
@@ -45,29 +45,17 @@ func f = -k1*( 4*cos(x)*cos(y) * ( exp(2*t) + cos(x)*cos(y) )
 	    - square(cos(x)) - square(cos(y))
 	    ) * exp(-4*t);
 
-// func real uExact(real t) {
-//   return  2 + exp(-2*t)*cos(x)*cos(y);
-// }
-// func real vExact(real t) {
-//   return uExact(t);
-// }
-// func real f(real t) {
-//   return -k1*( 4*cos(x)*cos(y) * ( exp(2*t) + cos(x)*cos(y) )
-// 	    - square(cos(x)) - square(cos(y))
-// 	    ) * exp(-4*t);
-// }
+// Variational problem: Euler time schemes
 
-// Variational problem (Euler time scheme)
-
-problem uKellerSegelEuler(u,bu)=
+problem uKellerSegelEulerImp(u,bu)=
   int2d(Th) (
 	     u*bu/dt
-	     + grad(u)'*grad(bu) + k1*u*grad(v)'*grad(bu) )
+	     + grad(u)'*grad(bu) - k1*u*grad(v)'*grad(bu) )
   - int2d(Th)(
 	      u0*bu/dt + f*bu
 	      );
 
-problem vKellerSegelEuler(v,bv) =
+problem vKellerSegelEulerImp(v,bv) =
   int2d(Th)(
 	    v*bv/dt
 	    + k2*grad(v)'*grad(bv) + k3*v*bv
@@ -76,7 +64,22 @@ problem vKellerSegelEuler(v,bv) =
 	      v0*bv/dt + k4*u0*bv
 	      );
 
-// Variational problem (theta scheme)
+// problem uKellerSegelEulerExp(u,bu)=
+//   int2d(Th) ( u*bu/dt )
+//   - int2d(Th)(
+// 	      u0*bu/dt + f*bu
+// 	     - grad(u0)'*grad(bu) + k1*u0*grad(v0)'*grad(bu)
+// 	      );
+
+// problem vKellerSegelEulerExp(v,bv) =
+//   int2d(Th)( v*bv/dt
+// 	    )
+//   - int2d(Th)(
+// 	      v0*bv/dt
+// 	    - k2*grad(v0)'*grad(bv) - k3*v0*bv + k4*u0*bv
+// 	      );
+
+// Variational problem: theta schemes
 
 real theta=0.5;
 
@@ -93,12 +96,12 @@ problem ecCalor(u,bu)=
 problem uKellerSegelCN(u,bu)=
   int2d(Th) (
 	     u*bu/dt
-	     + theta*( grad(u)'*grad(bu) + k1*u*grad(v)'*grad(bu) )
+	     + theta*( grad(u)'*grad(bu) - k1*u*grad(v)'*grad(bu) )
 	     )
   + int2d(Th)(
 	      - u0*bu/dt
 	      - ( theta*fh1 + (1-theta)*fh0 ) *bu
-	      + (1-theta)*( grad(u0)'*grad(bu) + k1*u0*grad(v0)'*grad(bu) )
+	      + (1-theta)*( grad(u0)'*grad(bu) - k1*u0*grad(v0)'*grad(bu) )
 	      );
 
 problem vKellerSegelCN(v,bv) =
@@ -132,13 +135,12 @@ NewMacro solveKS(iOrder, dt, nt)
    for (int k=1; k<=nt; k++){
 
      if(textVerbosity>0) cout << "Solving, iter: " << k << " (t=" << t << ")" << endl;
+
      fh0 = f;
-     t=t+dt;
+     t=t+dt;   // <----
      fh1 = f;
 
-     // ecCalor;
      vKellerSegelCN;
-     // vMean = (v+v0)/2;
      uKellerSegelCN;
 
      u0 = u;  // For next iteration
