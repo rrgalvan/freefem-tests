@@ -1,5 +1,6 @@
 // Keller-Segel Italy-Spain project
 
+load "Element_P3"
 //load "iovtk";
 include "getARGV.idp";
 
@@ -12,9 +13,10 @@ mesh Th = square(nx, nx, [pi*x, pi*y]);
 
 plot(Th, wait=1);
 
+fespace Uh(Th,P2);
+Uh u, u0, bu; // Solution at t_{n+1}, t_n, test function.
 fespace Vh(Th,P2);
-Vh u, u0, bu; // Solution at t_{n+1}, t_n, test function.
-Vh v, v0, bv, vMean; // Solution at t_{n+1}, t_n, test function.
+Vh v, v0, bv; // Solution at t_{n+1}, t_n, test function.
 Vh fh1,fh0;// force terms at time levels t^{n+1} and t^n respectively
 
 macro grad(u) [ dx(u), dy(u) ] // End of Macro
@@ -64,20 +66,20 @@ problem vKellerSegelEulerImp(v,bv) =
 	      v0*bv/dt + k4*u0*bv
 	      );
 
-// problem uKellerSegelEulerExp(u,bu)=
-//   int2d(Th) ( u*bu/dt )
-//   - int2d(Th)(
-// 	      u0*bu/dt + f*bu
-// 	     - grad(u0)'*grad(bu) + k1*u0*grad(v0)'*grad(bu)
-// 	      );
+problem uKellerSegelEulerExp(u,bu)=
+  int2d(Th) ( u*bu/dt )
+  - int2d(Th)(
+	      u0*bu/dt + f*bu
+	     - grad(u0)'*grad(bu) + k1*u0*grad(v0)'*grad(bu)
+	      );
 
-// problem vKellerSegelEulerExp(v,bv) =
-//   int2d(Th)( v*bv/dt
-// 	    )
-//   - int2d(Th)(
-// 	      v0*bv/dt
-// 	    - k2*grad(v0)'*grad(bv) - k3*v0*bv + k4*u0*bv
-// 	      );
+problem vKellerSegelEulerExp(v,bv) =
+  int2d(Th)( v*bv/dt
+	    )
+  - int2d(Th)(
+	      v0*bv/dt
+	    - k2*grad(v0)'*grad(bv) - k3*v0*bv + k4*u0*bv
+	      );
 
 // Variational problem: theta schemes
 
@@ -114,6 +116,15 @@ problem vKellerSegelCN(v,bv) =
 	      + (1-theta)*( k2*grad(v0)'*grad(bv) + k3*v0*bv )
 	      );
 
+problem vKellerSegelCNversion2(v,bv) =
+  int2d(Th)(
+	    v*bv/dt
+	    + theta*( k2*grad(v)'*grad(bv) + k3*v*bv )
+	    )
+  + int2d(Th)(
+	      - v0*bv/dt - theta*k4*u*bv
+	      + (1-theta)*( k2*grad(v0)'*grad(bv) + k3*v0*bv - k4*u0*bv)
+	      );
 // Time loop
 
 
@@ -140,7 +151,11 @@ NewMacro solveKS(iOrder, dt, nt)
      t=t+dt;   // <----
      fh1 = f;
 
-     vKellerSegelCN;
+     // a) u <- prediction of u^{m+1}
+     uKellerSegelEulerExp;
+     // b) v <- solution of KS using previous prediction
+     vKellerSegelCNversion2;
+     // c) u <- correction of u^{m+1}
      uKellerSegelCN;
 
      u0 = u;  // For next iteration
@@ -180,8 +195,10 @@ NewMacro solveKS(iOrder, dt, nt)
    cout << "u_error_L2_L2 : " << uL2Error[iOrder] << endl;
    cout << "v_error_L2_L2 : " << vL2Error[iOrder] << endl;
    if(iOrder>0) {
+     cout << "- - - - - - - - - - - - - - - - - - -" << endl;
      cout << "Order for ||u||_L2L2: " << log(uL2Error[iOrder-1]/uL2Error[iOrder])/log(2.0) << endl;
      cout << "Order for ||v||_L2L2: " << log(vL2Error[iOrder-1]/vL2Error[iOrder])/log(2.0) << endl;
+     cout << "- - - - - - - - - - - - - - - - - - -" << endl;
    }
    }
   EndMacro;
