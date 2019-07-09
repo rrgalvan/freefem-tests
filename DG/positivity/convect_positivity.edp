@@ -30,7 +30,7 @@ macro b() [b1, b2] // EOM
 //| Time parameters
 //`---------------------------------------------------------------------
 real t = 0;
-int niter = 500;
+int niter = 200;
 real dt = 5.e-3;
 
 //,---------------------------------------------------------------------
@@ -98,6 +98,7 @@ NewMacro aUPW(coeff, b, u, ub)
 // Godunov flux convection
 macro GodunovFlux(u, v, n) (v'*n*mean(u) - 0.5*abs(v'*n)*(-jump(u))) // EOM
   ;
+
 NewMacro aGodunov(coeff, b, u, ub)
   (
    -int2d(Th)( (coeff) * u * (b'*grad(ub)) )
@@ -173,7 +174,7 @@ NewMacro upwindTransport(K, Kupw)
       int j = J[k];
       if(i!=j) {
 	real tmp = max(0.0, max(-K(i,j), -K(j,i)));  // max(0,-K(i,j), -K(j,i))1
-	Kupw(i,j) = tmp;
+	Kupw(i,j) = K(i,j) + tmp;
 	Kupw(i,i) = Kupw(i,i) - tmp;
       }
       k++;
