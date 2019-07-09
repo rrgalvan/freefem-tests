@@ -31,19 +31,19 @@ macro b() [b1, b2] // EOM
 //`---------------------------------------------------------------------
 real t = 0;
 int niter = 200;
-real dt = 1.e-1;
+real dt = 5.e-2;
 
 //,---------------------------------------------------------------------
 //| Problem data
 //`---------------------------------------------------------------------
 
-real diffusionCoeff = .000;
+real diffusionCoeff = 1.e-3;
 real penaSIP = 4; // SIP DG interior penalty parameter
 real eta = 1; // UPW parameter
 
-real A=10, x0=0.3, y0=0.3;
-real mu=2*A;
-func initialUGaussian = exp( -A*( (x-x0)^2 + (y-y0)^2 ) );
+real alpha=10, x0=0.3, y0=0.3;
+real mu=2*alpha;
+func initialUGaussian = exp( -alpha*( (x-x0)^2 + (y-y0)^2 ) );
 func initialURiemann = x<0;
 u0 = initialUGaussian;
 
@@ -128,27 +128,29 @@ problem ConvectDiffThetaSchemeDG(u,ub) =
   - int2d(Th)(u0*ub/dt);
 
 // Bilinear form for variational formulation of convection
-varf aConvectThetaSchemeDG(u,ub) =
+varf varfConvectThetaSchemeDG(u,ub) =
   int2d(Th) (u*ub/dt)
   + aUPW( theta, b, u, ub );
 
 // Linear form for variational formulation of convection
-varf bConvectThetaSchemeDG(unused,ub) =
-  int2d(Th)(u0*ub/dt)
-  + aUPW( -(1-theta), b, u0, ub ); // - aUPW in RHS
+// varf varfConvectThetaSchemeDG(unused,ub) =
+//   int2d(Th)(u0*ub/dt)
+//   + aUPW( -(1-theta), b, u0, ub ); // - aUPW in RHS
 
 // Bilinear form for mass matrix
-varf aMassLump(u,ub) =
+varf varfMassLump(u,ub) =
   int2d(Th, qft=qf1pTlump) (u*ub/dt);
 
 // Bilinear form for convection matrix
-varf aConvectUPW(u, ub) =
+varf varfConvectUPW(u, ub) =
   aUPW( 1, b, u, ub );
 
 // Bilinear form for convection matrix
-varf aConvectGodunov(u, ub) =
+varf varfConvectGodunov(u, ub) =
   aGodunov( 1, b, u, ub );
 
+varf varfDiffusionSIP(u, ub) =
+  aSIP(1, u, ub);
 
 // ---------------------------------------------------------------------
 // Upwinding of the Transport matrix, K.
@@ -189,11 +191,20 @@ NewMacro upwindTransport(K, Kupw)
 //`---------------------------------------------------------------------
 
 // 1) Define matrix
-matrix M = aMassLump(Uh, Uh);   // Mass matrix
-matrix K = aConvectGodunov(Uh, Uh); // Convection matrix
+matrix M = varfMassLump(Uh, Uh);   // Mass matrix
+matrix K = varfConvectGodunov(Uh, Uh); // Convection matrix
+matrix S = varfDiffusionSIP(Uh,Uh); // Diffusion matrix
+// K = K + diffusionCoeff*S;
+
 matrix Kupw = K; // Upwinded convection matrix
 upwindTransport(K, Kupw); // Perform upwinding and store result in Kupw
-set(M, solver=UMFPACK);
+
+matrix Supw = S;
+upwindTransport(S, Supw); // Perform upwinding and store result in Kupw
+matrix A;
+A = M + (-1)*Supw + (-1)*K;
+
+set(A, solver=UMFPACK);
 
 for (int k=1; k<=niter; k++){
   t=t+dt;
@@ -203,10 +214,10 @@ for (int k=1; k<=niter; k++){
 
   // 2) Define RHS
   real[int] F = M*u0[];
-  F += Kupw*u0[];
+  // F += Kupw*u0[];
 
   // 3) Solve system
-  u[] = M^-1*F;
+  u[] = A^-1*F;
 
   // ···································································
 
