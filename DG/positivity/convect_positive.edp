@@ -202,7 +202,7 @@ upwindTransport(K, Kupw); // Perform upwinding and store result in Kupw
 matrix Supw = S;
 upwindTransport(S, Supw); // Perform upwinding and store result in Kupw
 matrix A;
-A = M + (-1)*Supw + (-1)*K;
+A = M + (-1)*Supw + (-1)*Kupw;
 
 set(A, solver=UMFPACK);
 
