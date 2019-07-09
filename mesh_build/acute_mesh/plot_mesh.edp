@@ -1,0 +1,5 @@
+string filename = ARGV[2];
+cout << "Plotting mesh " << filename << endl << endl;
+mesh Th=readmesh(filename);
+plot(Th// , ps="/tmp/acute_mesh.ps"
+     );
