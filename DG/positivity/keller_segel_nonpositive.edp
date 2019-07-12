@@ -11,7 +11,6 @@
 verbosity=0;
 load "iovtk";
 
-
 //,---------------------------------------------------------------------
 //| Mesh and finite elements
 //`---------------------------------------------------------------------
@@ -29,7 +28,10 @@ mesh Th = buildmesh(Gamma(nx));
 // int nx = 30;
 // mesh Th = square(nx, nx, [4*x-2, 4*y-2]);
 
-fespace Uh(Th, P1dc);
+// =====================================================
+// P1 FINITE ELEMENTS
+// =====================================================
+fespace Uh(Th, P1);
 Uh u, ub; // Unknown and test function
 Uh u0;
 fespace Vh(Th, P1);
@@ -255,33 +257,9 @@ for (int k=1; k<=niter; k++) {
 
   // Solve system for v ······················································
   KellerSegelV; // Compute v from u0
-  // Compute negative advection vector (because scheme is for dt(v) - div(bv) = 0 )
-  b1 = -dx(v);
-  b2 = -dy(v);
 
   // Solve system for u ······················································
-
-  // 1) Mount convection term
-  matrix K = varfConvectGodunov(Uh, Uh); // Convection matrix
-  matrix Kupw = K; // Upwinded convection matrix
-  upwindTransport(K, Kupw); // Make upwinding into Kupw matrix
-  if(!explicitScheme) {
-    A = A + (-k1)*Kupw; // Implicit scheme
-  }
-
-  // 2) Define RHS
-  real[int] F = M*u0[];
-  // F += Supw*u0[];
-  if(explicitScheme) {
-    real [int] k0u = k0*u0[];
-    F += Supw*k0u; // Explicit diffusion
-    real [int] k1u = k1*u0[];
-    F += Kupw*k1u; // Explicit convection
-  }
-
-  // 3) Solve system
-  set(A, solver=UMFPACK);
-  u[] = A^-1*F;
+  KellerSegelU; // Compute v from u0
 
   // ···································································
 
