@@ -1,0 +1,165 @@
+verbosity=0;
+load "iovtk";
+
+
+//,---------------------------------------------------------------------
+//| Mesh and finite elements
+//`---------------------------------------------------------------------
+
+//>> Paremeters from G. Viglialoro et al....
+// int nx = 30;
+// mesh Th = square(nx, nx, [4*x-2, 4*y-2]);
+//>> Parameters from Y. Epshtyn & A. Kurganov...
+int nx = 50;
+mesh Th = square(nx, nx, [ x-0.5, y-0.5 ]);
+
+
+fespace Uh(Th, P1);
+Uh u, ub; // Unknown and test function
+Uh u0;
+fespace Vh(Th, P1);
+Vh v, vb, v0;
+
+//,---------------------------------------------------------------------
+//| Time parameters
+//`---------------------------------------------------------------------
+real t = 0;
+int niter = 300;
+real dt = 1.e-5;
+
+//,---------------------------------------------------------------------
+//| Keller-Segel data
+//`---------------------------------------------------------------------
+// real k0=1, k1=0.2, k2=1, k3=0.1, k4=1;
+real k0=1, k1=3, k2=1, k3=1, k4=1;
+
+//>> Paremeters from G. Viglialoro et al....
+// func initialU = 1.15*exp(-x^2-y^2)*(4-x^2)^2*(4-y^2)^2;
+// func initialV = 0.55*exp(-x^2-y^2)*(4-x^2)^2*(4-y^2)^2;
+// u0 = initialU;
+// v0 = initialV;
+//>> Parameters from Y. Epshtyn & A. Kurganov...
+u0 = 1200*exp(-120*(x^2+y^2));
+v0 = 600*exp(-60*(x^2+y^2));
+//>> Other parameters
+// real C=50, alpha=20, x0=0.0, y0=0.0;
+// func initialUGaussian = C*exp( -alpha*( (x-x0)^2 + (y-y0)^2 ) );
+// func initialURiemann = x<0;
+// u0 = initialUGaussian;
+// v0 = u0;
+
+real integralU0=int2d(Th)(u0);
+cout <<"La integral del dato inicial es "<< integralU0 << "(4*pi=" << 4*pi << ")" << endl;
+
+string testName = "KS_" +
+  "dt:" + dt + "_nx:" + nx +
+  "_k0" + k0 + "_k1:" + k1 + "_k2:" + k2 + "_k3:" + k3 + "_k4:" + k4;
+cout << "Running test " << testName << endl;
+
+string outputDir = "./";
+ofstream fMaxU(outputDir + "uMax_" + testName + ".txt");
+ofstream fMinU(outputDir + "uMin_" + testName + ".txt");
+ofstream fMaxV(outputDir + "vMax_" + testName + ".txt");
+ofstream fMinV(outputDir + "vMin_" + testName + ".txt");
+ofstream fIntU(outputDir + "uInt_" + testName + ".txt");
+ofstream fIntV(outputDir + "vInt_" + testName + ".txt");
+
+//,---------------------------------------------------------------------
+//| Variational problems
+//`---------------------------------------------------------------------
+
+// Macros..............................................................>
+macro grad(u) [ dx(u), dy(u) ] // End of Macro
+  ; // for emacs :)
+macro div(u,v) ( dx(u) + dy(v) ) // End of Macro
+  ; // for emacs :)
+
+// (Coninuous FEM) Keller Segel problem
+problem KellerSegelU(u,ub)=
+  int2d(Th)( u*ub/dt + k0*grad(u)'*grad(ub) )
+  + int2d(Th)( - u0*ub/dt - k1*u0*grad(v)'*grad(ub) );
+problem KellerSegelV(v,vb)=
+  int2d(Th)( v*vb/dt + k2*grad(v)'*grad(vb) + k3*v*vb )
+  + int2d(Th)( - v0*vb/dt - k4*u0*vb );
+
+
+// Linear form for variational formulation of convection
+// varf varfConvectThetaSchemeDG(unused,ub) =
+//   int2d(Th)(u0*ub/dt)
+//   + aUPW( -(1-theta), b, u0, ub ); // - aUPW in RHS
+
+// Bilinear form for mass matrix
+varf varfMassLump(u,ub) =
+  int2d(Th, qft=qf1pTlump) (u*ub/dt);
+
+
+//,---------------------------------------------------------------------
+//| Time loop
+//`---------------------------------------------------------------------
+
+// // 1) Define matrix
+// matrix M = varfMassLump(Uh, Uh);   // Mass matrix
+// matrix S = varfDiffusionSIP(Uh,Uh); // Diffusion matrix
+
+// matrix Supw = S;
+// upwindTransport(S, Supw); // Perform upwinding and store result in Supw
+// matrix A;
+// bool explicitScheme=false;
+// if(explicitScheme) {
+//   A = M; // Explicit scheme
+//  }
+//  else {
+//    A = M + (-k0)*Supw; // Implicit scheme
+//  }
+
+for (int k=1; k<=niter; k++) {
+  t=t+dt;
+  cout << "iter = " << k << "\t (t = " << t << ")" << endl;
+
+  // Solve system for v ······················································
+  KellerSegelV; // Compute v from u0
+
+  // Solve system for u ······················································
+  KellerSegelU; // Compute v from u0
+
+
+  // // 2) Define RHS
+  // real[int] F = M*u0[];
+
+  // // 3) Solve system
+  // set(A, solver=UMFPACK);
+  // u[] = A^-1*F;
+
+  // ···································································
+
+  real uMax = u[].max; real uMin=u[].min;
+  real vMax = v[].max; real vMin=v[].min;
+  cout << "  max(u) = " << uMax << "  min(u) = " << uMin
+       << (uMin<0 ? " ...---... Positivity broken!!!" : "") << endl;
+  cout << "  max(v) = " << vMax << "  min(v) = " << vMin
+       << (vMin<0 ? " ...---... (V) Positivity broken!!!" : "") << endl;
+  real uInt = int2d(Th)(u); real vInt = int2d(Th)(v);
+  cout << "  int_Th(u) = " << uInt << "  int_Th(v) = " << vInt << endl;
+
+  bool saveMinMaxInt=true;
+  if (saveMinMaxInt) {
+    fMaxU << uMax << endl;
+    fMinU << uMin << endl;
+    fMaxV << vMax << endl;
+    fMinV << vMin << endl;
+    fIntU << uInt << endl;
+    fIntV << vInt << endl;
+  }
+
+  u0 = u;  // Prepare next iteration
+  v0 = v;
+
+  plot(v, value=1, fill=1, dim=3);
+
+  bool plotToVTK=true; if(plotToVTK) {
+    string vtkFile="/tmp/" + testName + ".vtk";
+    int[int] vtkOrder=[0];
+    savevtk(vtkFile, Th, u, v, dataname="u v", order=vtkOrder);
+  }
+
+ }

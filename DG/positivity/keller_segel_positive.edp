@@ -315,5 +315,4 @@ for (int k=1; k<=niter; k++) {
     savevtk(vtkFile, Th, u, v, dataname="u v", order=vtkOrder);
   }
 
-
  }
