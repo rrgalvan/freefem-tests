@@ -1,6 +1,6 @@
 verbosity=0;
 load "iovtk";
-
+load "qf11to25"
 
 //,---------------------------------------------------------------------
 //| Mesh and finite elements
@@ -101,8 +101,12 @@ varf varfMassLump(u,ub) =
 varf varfDiffusion(u,ub) =
   int2d(Th) ( grad(u)'*grad(ub) );
 
+real[int,int] qq1=[ // w_i, (x_baric_i : y_baric_i : )
+		   [1.,  1./4, 1./4] ];
+QF2 qf1(1,qq1);
+
 varf varfChemotaxisExplicitV(u,ub)=
-  int2d(Th)( -u*grad(v0)'*grad(ub) );
+  int2d(Th, qft=qf1)( -u*grad(v0)'*grad(ub) );
 
 //,---------------------------------------------------------------------
 //| Time loop

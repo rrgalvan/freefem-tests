@@ -11,7 +11,6 @@
 verbosity=0;
 load "iovtk";
 
-
 //,---------------------------------------------------------------------
 //| Mesh and finite elements
 //`---------------------------------------------------------------------
@@ -21,8 +20,9 @@ load "iovtk";
 //`---------------------------------------------------------------------
 real R=1.5;
 border Gamma(t=0, 2*pi) { x=R*cos(t);  y=R*sin(t); };
-int nx = 60;
+int nx = 6;
 mesh Th = buildmesh(Gamma(nx));
+plot(Th, wait=1);
 //,---------------------------------------------------------------------
 // Square mesh
 //`---------------------------------------------------------------------
@@ -32,10 +32,10 @@ mesh Th = buildmesh(Gamma(nx));
 fespace Uh(Th, P1dc);
 Uh u, ub; // Unknown and test function
 Uh u0;
-fespace Vh(Th, P1);
+fespace Vh(Th, P2);
 Vh v, vb, v0;
 real convectionFactor=40;
-Uh b1 = convectionFactor*y, b2 = -convectionFactor*x;
+Vh b1, b2;
 macro b() [b1, b2] // EOM
   ;
 
@@ -43,7 +43,7 @@ macro b() [b1, b2] // EOM
 //| Time parameters
 //`---------------------------------------------------------------------
 real t = 0;
-int niter = 300;
+int niter = 20;
 real dt = 1.e-3;
 
 //,---------------------------------------------------------------------
@@ -72,12 +72,12 @@ string testName = "KS_" +
 cout << "Running test " << testName << endl;
 
 string outputDir = "./";
-ofstream fMaxU(outputDir + "uMax_" + testName + ".txt");
-ofstream fMinU(outputDir + "uMin_" + testName + ".txt");
-ofstream fMaxV(outputDir + "vMax_" + testName + ".txt");
-ofstream fMinV(outputDir + "vMin_" + testName + ".txt");
-ofstream fIntU(outputDir + "uInt_" + testName + ".txt");
-ofstream fIntV(outputDir + "vInt_" + testName + ".txt");
+// ofstream fMaxU(outputDir + "uMax_" + testName + ".txt");
+// ofstream fMinU(outputDir + "uMin_" + testName + ".txt");
+// ofstream fMaxV(outputDir + "vMax_" + testName + ".txt");
+// ofstream fMinV(outputDir + "vMin_" + testName + ".txt");
+// ofstream fIntU(outputDir + "uInt_" + testName + ".txt");
+// ofstream fIntV(outputDir + "vInt_" + testName + ".txt");
 
 //,---------------------------------------------------------------------
 //| DG data
@@ -199,7 +199,7 @@ varf varfDiffusionSIP(u, ub) =
 // ---------------------------------------------------------------------
 // Upwinding of the Transport matrix, K.
 //
-// Macro stores the result in the matrix Kupw.
+// Macro computes K* and stores K+K* in the matrix Kupw.
 //
 // See "High-Order Local Maximum Principle Preserving (MPP)
 // Discontinuous Galerkin Finite Element Method for the Transport
@@ -210,6 +210,7 @@ NewMacro upwindTransport(K, Kupw)
 {
   int[int] I(1),J(1); real[int] C(1);
   [I,J,C]=K; // get the sparse terms of the matrix K (the arrays are resized)
+  // cout << "I=" << I << endl;
   int n=K.n;
   int k=0;
   for(int i=0; i<n; i++) {
@@ -219,7 +220,7 @@ NewMacro upwindTransport(K, Kupw)
       // cout << "k=" << k << endl;
       int j = J[k];
       if(i!=j) {
-	real tmp = max(0.0, max(-K(i,j), -K(j,i)));  // max(0,-K(i,j), -K(j,i))1
+	real tmp = max(0.0, max(-K(i,j), -K(j,i)));  // max(0,-K(i,j), -K(j,i))
 	Kupw(i,j) = K(i,j) + tmp;
 	Kupw(i,i) = Kupw(i,i) - tmp;
       }
@@ -228,6 +229,77 @@ NewMacro upwindTransport(K, Kupw)
     }
   }
 } EndMacro;
+;
+
+// ---------------------------------------------------------------------
+// Upwinding of the Transport matrix, K.
+//
+// Macro computes "antidiffusion" matrix D
+//
+// See "High-Order Local Maximum Principle Preserving (MPP)
+// Discontinuous Galerkin Finite Element Method for the Transport
+// Equation". R. Anderson, V. Dobrev, Tz. Kolev, D. Kuzmin, M. Quezada
+// de Luna, R. Rieben and V. Tomov
+// ---------------------------------------------------------------------
+NewMacro computeD(K, D)
+{
+  // int[int] I(1),J(1); real[int] C(1);
+  // [I,J,C]=K; // get the sparse terms of the matrix K (the arrays are resized)
+  // cout << "I=" << I << endl;
+  // cout << "J=" << J << endl;
+  int n=K.n;
+  int k=0;
+  real rowSum=0;
+  for(int i=0; i<n; i++) {
+    while(I[k]==i) {
+      int j = J[k];
+      if(i!=j) {
+	real Dij = max(0.0, max(-K(i,j), -K(j,i)));  // max(0,-K(i,j), -K(j,i))
+	D(i,j) = Dij;
+	rowSum = rowSum + Dij;
+	cout << "D(" << i << "," << j << ") = " << Dij << endl;
+      }
+      k++;
+      if(k==I.n) break;
+    }
+    D(i,i) = -rowSum;
+    cout << "D(" << i << "," << i << ") = " << D(i,i) << endl;
+  }
+} EndMacro;
+;
+
+NewMacro printRowsSum(M, matrixString, assertZero)
+{
+  int n=M.n;
+  real[int] tmpV(n);
+  tmpV=1;
+  real[int] resultingV = M*tmpV;
+  cout << "Sum of rows of matrix " << matrixString << ":" << endl;
+  // cout << resultingV << endl;
+  real sumaTotal=0;
+  for(int i=0; i<n; i++) sumaTotal += resultingV(i);
+  cout << "  total rows (absolute values) sum = " << sumaTotal << endl;
+  // if(assertZero) {
+  //   assert(sumaTotal<1.e-10);
+  // }
+} EndMacro
+;
+NewMacro printColumnsSum(M, matrixString, assertZero)
+{
+  matrix MT = M';
+  int n=MT.n;
+  real[int] tmpV(n);
+  tmpV=1;
+  real[int] resultingV = MT*tmpV;
+  cout << "Sum of columns of matrix " << matrixString << ":" << endl;
+  // cout << resultingV << endl;
+  real sumaTotal=0;
+  for(int i=0; i<n; i++) sumaTotal += resultingV(i);
+  cout << "  total columns (absolute values) sum = " << sumaTotal << endl;
+  // if(assertZero) {
+  //   assert(sumaTotal<1.e-10);
+  // }
+} EndMacro
 ;
 
 //,---------------------------------------------------------------------
@@ -240,14 +312,7 @@ matrix S = varfDiffusionSIP(Uh,Uh); // Diffusion matrix
 
 matrix Supw = S;
 upwindTransport(S, Supw); // Perform upwinding and store result in Supw
-matrix A;
-bool explicitScheme=false;
-if(explicitScheme) {
-  A = M; // Explicit scheme
- }
- else {
-   A = M + (-k0)*Supw; // Implicit scheme
- }
+matrix A = M;
 
 for (int k=1; k<=niter; k++) {
   t=t+dt;
@@ -263,9 +328,33 @@ for (int k=1; k<=niter; k++) {
 
   // 1) Mount convection term
   matrix K = varfConvectGodunov(Uh, Uh); // Convection matrix
-  matrix Kupw = K; // Upwinded convection matrix
+  // cout << "K=" << K << endl;
+  matrix Ktransp = K';
+  matrix Ktmp = K + Ktransp;
+  int[int] I(1),J(1); real[int] C(1);
+  [I,J,C] = Ktmp;
+  C = 0;
+  matrix D=[I,J,C];
+  computeD(K,D);
+  printColumnsSum(D, "D columns sum:", false);
+  matrix Dtransp = D';
+  matrix Dtmp = D + (-1)*Dtransp;
+  cout << "D-D'=" << Dtmp;
+
+  cout << "K=" << K << endl;
+  cout << "D=" << D << endl;
+
+  matrix Kupw = [I,J,C]; // Upwinded convection matrix
   upwindTransport(K, Kupw); // Make upwinding into Kupw matrix
+  printRowsSum(K, "K rows sum:", false);
+  printColumnsSum(K, "K columns sum:", false);
+  // cout << "Kupw=" << Kupw << endl;
+  printRowsSum(Kupw, "Kupw rows sum:", false);
+  printColumnsSum(Kupw, "Kupw columns sum:", false);
+
+  bool explicitScheme=true;
   if(!explicitScheme) {
+    A = M + (-k0)*Supw; // Implicit scheme
     A = A + (-k1)*Kupw; // Implicit scheme
   }
 
@@ -294,15 +383,15 @@ for (int k=1; k<=niter; k++) {
   real uInt = int2d(Th)(u); real vInt = int2d(Th)(v);
   cout << "  int_Th(u) = " << uInt << "  int_Th(v) = " << vInt << endl;
 
-  bool saveMinMaxInt=true;
-  if (saveMinMaxInt) {
-    fMaxU << uMax << endl;
-    fMinU << uMin << endl;
-    fMaxV << vMax << endl;
-    fMinV << vMin << endl;
-    fIntU << uInt << endl;
-    fIntV << vInt << endl;
-  }
+  // bool saveminmaxint=true;
+  // if (saveMinMaxInt) {
+  //   fMaxU << uMax << endl;
+  //   fMinU << uMin << endl;
+  //   fMaxV << vMax << endl;
+  //   fMinV << vMin << endl;
+  //   fIntU << uInt << endl;
+  //   fIntV << vInt << endl;
+  // }
 
   u0 = u;  // Prepare next iteration
   v0 = v;
