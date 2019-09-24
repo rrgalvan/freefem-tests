@@ -1,0 +1,186 @@
+// Problema de Stokes evolutivo 2D:
+//
+// dt(u) - nu*( dxx(u) + dyy(u) ) + dx(p) = 0
+// dt(u) - nu*( dxx(v) + dyy(v) ) + dy(p) = 0
+//         dx(u) + dy(v) = 0
+//   + condiciones_de_contorno
+//   + condicion_inicial
+//
+// donde dx=derivada parcial respecto a x, dxx = derivada segunda respecto a x, etc.
+//
+// La variable nu es la viscosidad cinemática (nu=mu/rho, donde mu es
+// la viscosidad dinámica y rho es la densidad).
+//
+// La variable p es resultande del cambio de variables: p = (p'-pInf)/rho, donde
+// pInf es la presión de referencia. Por tanto, la presión resultante, p, hay que
+// redefinirla como p*rho+pInf
+//
+// Dominio geométrico y condiciones de contorno:
+//
+// * Dominio rectangular con un agujero circular
+// * Cálculo de la vorticidad y almacenamiento en un fichero VTK
+//   (para su posterior visualización con VTK)
+// * Condiciones de contorno: u=v=0 en la circunferencia, v=0 en toda la frontera,
+//   u es un valor dado en la pared izquierda, grad(u)*n=0 en el resto de las
+//   paredes.
+//
+// Esquema en tiempo Euler implícito: si t^m = m*dt (m=0,1,...),
+//   dt(u(t^{m+1}) ~= (u^{m+1}-u^m) / dt
+
+// Datos físicos
+real rho=998.2; // Densidad del agua (en kg/m^3) a 20 grados C.
+// real mu=1.102e-3; // Viscosidad dinámica del agua (en N*s/m^2) a 20 grados C.
+real mu=1;
+real nu=mu/rho; // Viscodidad cinemática del agua (en m^2/s)
+
+// Parámetros del sistema
+real L=10; // Longitud característica (por ejemplo, en metros).
+real V=1.e-1; // Velocidad característica
+real Re=V*L/nu; // Número de Reynodlds
+
+cout << "=======================================================================" << endl;
+cout << "Ejecutando experimento con:  Re=" << Re
+     << "  (V=" << V << ", L=" << L << ", nu=" << nu << ")" << endl;
+cout << "=======================================================================" << endl;
+
+// Coordenadas para definir el rectángulo exterior
+real xcoor = 15*L, ycoor = 5*L;
+
+// Etiquetas para definir las fronteras del dominiuint
+// Definición del círculo
+real R1=1.5*L, R2=0.5*L;
+real angle=pi/3;
+border dropTop(k=-angle, pi+angle) { x=R1*cos(k); y=R2*sin(k); }
+border dropBottom(k=pi+angle,2*pi-angle) { x=R1*cos(k); y=R2*sin(k); }
+
+// Construcción de la malla
+int nx=70;
+mesh Th = buildmesh( dropTop(nx) + dropBottom(nx/2) );
+
+// Stokes: Defnición de espacios y funciones de elementos finitos
+fespace Vh(Th,P2); // Espacio para velocidades
+fespace Qh(Th,P1); // Espacio para presiones
+Vh u,v,uu,vv; // Incógnitas u,v y funciones test uu,vv
+Vh u0,v0; // Solución (campo de velocidades) en la etapa anterior
+Qh p,pp; // Presión y función test
+
+// KS: Spaces and finite elements
+fespace Nh(Th,P1); // FE space for live cell density
+fespace Ch(Th,P1); // FE space for chemical density
+Nh n, nn, n0;
+Ch c, cc, c0;
+
+// Esquema en tiempo
+real T0=0;
+int niter=300; // Número de iteraciones en tiempo
+real dt=0.1; // Paso de tiempo
+int  iter; // Contador de iteraciones
+real t; // Instante actual
+
+//,---------------------------------------------------------------------
+//| Stokes data
+//`---------------------------------------------------------------------
+real dxPhi=0;
+real dyPhi=100;
+
+u0=0;
+v0=0;
+
+//,---------------------------------------------------------------------
+//| Keller-Segel data
+//`---------------------------------------------------------------------
+// real k0=1, k1=0.2, k2=1, k3=0.1, k4=1;
+real k0=1, k1=3, k2=1, k3=1, k4=1;
+
+// real alpha=30, x0=0.3, y0=0.3;
+real alpha=20, x0=0.0, y0=0.0;
+func initialUGaussian = 10*exp( -alpha*( R1*(x-x0)^2 + R2*(y-y0)^2 ) );
+func initialURiemann = x<0;
+n0 = initialUGaussian;
+c0 = n0;
+
+//
+// Definition of variational problems
+//
+macro grad(u) [dx(u), dy(u)] // fin de macro
+  ; // for emacs
+macro div(u,v) (dx(u)+dy(v)) // fin de macro
+  ; // for emacs
+macro dot(u,v) (u[0]*v[0] + u[1]*v[1])  // (v1,v2) * (Normal Vector)
+  ; // for emacs
+macro ff(c) c //
+  ; // for emacs
+
+problem StokesUnsteady2d( [u,v,p], [uu,vv,pp]
+		  // , solver=LU // Ejemplo de selección de "solver"
+		  ) =
+  // Forma bilineal ("primer miembro")
+  int2d(Th)(
+	    u*uu/dt + v*vv/dt
+	    + nu*grad(u)'*grad(uu) + nu*grad(v)'*grad(vv)
+	    - p*div(uu,vv) + pp*div(u,v)
+	    + 1e-12 * p*pp // Penalización de la presión ( => unicidad de solución)
+	    )
+  // Forma lineal ("segundo miembro")
+  +int2d(Th)(
+	    n*dxPhi*uu + n*dyPhi*vv
+	    - u0*uu/dt - v0*vv/dt
+	     )
+  // // Condiciones de contorno Dirichlet
+  + on(dropTop, u=0, v=0)
+  + on(dropBottom, u=0, v=0)
+;
+
+// (Coninuous FEM) Keller Segel problem
+problem KellerSegelN(n,nn)=
+  int2d(Th)( n*nn/dt + k0*grad(n)'*grad(nn)
+	     + dot([u,v], grad(n)) * nn )
+  + int2d(Th)( - n0*nn/dt - k1*n0*grad(c)'*grad(nn) );
+problem KellerSegelC(c,cc)=
+  int2d(Th)( c*cc/dt + k2*grad(c)'*grad(cc) + k3*c*cc
+	     + dot([u,v], grad(c)) * cc )
+  + int2d(Th)( - c0*cc/dt - k4*n0*cc );
+
+//
+// Bucle de iteraciones en tiempo
+//
+for(iter=0; iter<niter; iter++)
+  {
+    t = T0 + (iter+1)*dt;
+    cout << "Iteration " << iter << ", t=" << t << endl;
+
+    //
+    // Solve problem at current time step
+    //
+    StokesUnsteady2d;
+
+    KellerSegelC;
+    KellerSegelN;
+
+    //
+    // Prepare next iteration
+    //
+    u0=u;
+    v0=v;
+    n0=n;
+    c0=c;
+
+    //
+    // Plot some grahics
+    //
+    // plot(Th, p, fill=1, value=1);
+    plot(Th, [u,v], value=1, wait=0);
+    plot(Th, n, value=1, wait=0);
+
+    // Save to VTK (for high quality plottin)
+    bool saveVTK=true;
+    if(saveVTK)
+      {
+	load "iovtk";
+	string filename = "stokes-evolution-iter" + iter + ".vtk";
+	savevtk(filename, Th, [u,v,0], p, n, c,
+		dataname="Velocity Pressure Cell Chemical");
+      }
+
+
+  }
