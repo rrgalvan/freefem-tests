@@ -7,7 +7,7 @@ cout.precision(10);
 //`---------------------------------------------------------------------
 real R=1.5;
 border Gamma(t=0, 2*pi) { x=R*cos(t);  y=R*sin(t); };
-int nx = 150;
+int nx = 200;
 mesh Th = buildmesh(Gamma(nx));
 
 // Unknown and test functions
@@ -21,23 +21,29 @@ Vh v, vb, v0;
 //`---------------------------------------------------------------------
 real t = 0;
 int niter = 300;
-real dt = 1.e-3;
+real dt = 1.e-2;
 
 //,---------------------------------------------------------------------
 //| Keller-Segel data
 //`---------------------------------------------------------------------
 // real k0=1, k1=0.2, k2=1, k3=0.1, k4=1;
-real k0=1, k1=1, k2=1, k3=1, k4=1;
+real k0=1, k1=100, k2=1, k3=1, k4=1;
 
 // real alpha=30, X0=0.3, Y0=0.3;
 real C0=500, C1=30, X0=0.0, Y0=0.0;
-real infU = 5;
+real infU = 0;
 func initialUGaussian = infU + C0*exp( -C1*( (x-X0)^2 + (y-Y0)^2 ) );
 u0 = initialUGaussian;
 v0 = 0.5*u0;
 
 bool printResults = true; if(printResults) {
-  real uInt = int2d(Th)(u0); real vInt = int2d(Th)(v0);
+  real uMax = u0[].max; real uMin=u0[].min;
+  real vMax = v0[].max; real vMin=v0[].min;
+  cout << "  max(u0) = " << uMax << "  min(u0) = " << uMin
+       << (uMin<0 ? " ...---... (u) Positivity broken!!!" : "") << endl;
+  cout << "  max(v0) = " << vMax << "  min(v0) = " << vMin
+       << (vMin<0 ? " ...---... (v) Positivity broken!!!" : "") << endl;
+ real uInt = int2d(Th)(u0); real vInt = int2d(Th)(v0);
   cout << "int_Th(u0) = " << uInt << "  int_Th(v0) = " << vInt << endl;
  }
 
@@ -90,6 +96,42 @@ NewMacro upwindTransport(K, Kupw)
 } EndMacro;
 ;
 
+// ---------------------------------------------------------------------
+// Compute artificial diffusion matrix and store it into D
+//
+// This macro assumes that adequate vectors I, J, C have been computed, eg:
+// int[int] I(1),J(1); real[int] C(1);
+// [I,J,C]=K; // get the sparse terms of the matrix K (the arrays are resized)
+//
+// See "High-Order Local Maximum Principle Preserving (MPP)
+// Discontinuous Galerkin Finite Element Method for the Transport
+// Equation". R. Anderson, V. Dobrev, Tz. Kolev, D. Kuzmin, M. Quezada
+// de Luna, R. Rieben and V. Tomov
+// ---------------------------------------------------------------------
+NewMacro computeArtificialDiffusion(K, D)
+{
+  int n=K.n;
+  int k=0;
+  for(int i=0; i<n; i++) {
+    real rowSum=0;
+    while(I[k]==i) {
+      int j = J[k];
+      if(i!=j) {
+	real Dij = max(0.0, max(-K(i,j), -K(j,i)));  // max(0,-K(i,j), -K(j,i))
+	D(i,j) = Dij;
+	rowSum = rowSum + Dij;
+	// cout << "D(" << i << "," << j << ") = " << Dij << endl;
+      }
+      k++;
+      if(k==I.n) break;
+    }
+    D(i,i) = -rowSum;
+    // cout << "D(" << i << "," << i << ") = " << D(i,i) << endl;
+    // cout << "i=" << i << ", rowSum=" << rowSum << endl;
+  }
+} EndMacro;
+;
+
 // (Coninuous FEM) Keller Segel problem ·······································
 problem KellerSegelU(u,ub)=
   int2d(Th)( u*ub/dt + k0*grad(u)'*grad(ub) )
@@ -121,8 +163,8 @@ matrix Mu = varfMassLump(Uh, Uh);   // Mass matrix
 matrix Lu = varfDiffusion(Uh,Uh); // Diffusion matrix
 matrix Mv=Mu, Lv=Lu; // Asuming same basis for u and v !!!
 
-matrix A0u = Mu + dt*Lu;
-matrix Av = (1+dt)*Mv + dt*Lv;
+matrix A0u = Mu + dt*k0*Lu;
+matrix Av = (1+dt*k3)*Mv + dt*k2*Lv;
 
 // 1) Time-dependent computation
 for (int k=1; k<=niter; k++) {
@@ -136,7 +178,7 @@ for (int k=1; k<=niter; k++) {
   // Solve system for v ·······················································
   real[int] F1v = Mv*v0[];
   real[int] F2v = Mu*u0[];
-  real[int] Fv = F1v + dt*F2v;
+  real[int] Fv = F1v + dt*k4*F2v;
 
   set(Av, solver=UMFPACK);
   v[] = Av^-1*Fv;
@@ -145,9 +187,23 @@ for (int k=1; k<=niter; k++) {
   real[int] Fu = Mu*u0[];
 
   matrix Ku = varfChemotaxisConvect(Uh, Uh); // Convection matrix
-  matrix Kupw = Ku; // Upwinded convection matrix
-  upwindTransport(Ku, Kupw); // Make upwinding into Kupw matrix
-  matrix Au = A0u + (-dt)*Kupw;
+
+  // // Añadir difusión artificial: Posibilidad 1
+  // matrix Kupw = Ku; // Upwinded convection matrix
+  // upwindTransport(Ku, Kupw); // Make upwinding into Kupw matrix
+  // matrix Au = A0u + (-dt*k1)*Kupw;
+
+  // Añadir difusión artificial: Posibilidad 2
+  matrix Ktranspose = Ku';
+  matrix Ktmp = Ku + Ktranspose;
+  int[int] I(1),J(1); real[int] C(1);
+  [I,J,C] = Ktmp;
+  C = 0;
+  matrix D=[I,J,C];
+  computeArtificialDiffusion(Ku, D); // D <- artificial diffusion
+  // cout << "D=" << D << endl;
+  Ku = Ku + D;
+  matrix Au = A0u + (-dt*k1)*Ku;
 
   set(Au, solver=UMFPACK);
   u[] = Au^-1*Fu;
