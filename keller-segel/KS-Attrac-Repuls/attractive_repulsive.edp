@@ -48,8 +48,8 @@ func initialUGaussian = infU + C0*exp( -C1*( (x-x0)^2 + (y-y0)^2 ) );
 func initialURiemann = x<0;
 u0 = initialUGaussian;
 u0s = pow(u0, s);
-v0 = u0;
-w0 = u0;
+v0 = 0.5*u0;
+w0 = 0.5*u0;
 
 // func initialU = 1.15*exp(-x^2-y^2)*(4-x^2)^2*(4-y^2)^2;
 // func initialV = 0.55*exp(-x^2-y^2)*(4-x^2)^2*(4-y^2)^2;
@@ -85,13 +85,13 @@ problem KSAttRepU(u,ub)=
 // Keller Segel problem / v
 problem KSAttRepV(v,vb)=
   int2d(Th)( v*vb/dt + grad(v)'*grad(vb) + beta*v*vb )
-  + int2d(Th)( alpha*u0s*vb
+  + int2d(Th)( - alpha*u0s*vb
 	       - v0*vb/dt );
 
-// Keller Segel problem / v
+// Keller Segel problem / w
 problem KSAttRepW(w,wb)=
   int2d(Th)( tau*w*wb/dt + grad(w)'*grad(wb) + delta*w*wb )
-  + int2d(Th)( gamma*u0*wb
+  + int2d(Th)( - gamma*u0*wb
 	       - tau*w0*wb/dt );
 
 // Time loop ###################################################
