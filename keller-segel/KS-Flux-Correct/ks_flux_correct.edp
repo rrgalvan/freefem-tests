@@ -1,0 +1,184 @@
+verbosity=0;
+load "iovtk";
+cout.precision(10);
+
+//,---------------------------------------------------------------------
+// Circle mesh
+//`---------------------------------------------------------------------
+real R=1.5;
+border Gamma(t=0, 2*pi) { x=R*cos(t);  y=R*sin(t); };
+int nx = 150;
+mesh Th = buildmesh(Gamma(nx));
+
+// Unknown and test functions
+fespace Uh(Th, P1);
+Uh u, ub, u0;
+fespace Vh(Th, P1);
+Vh v, vb, v0;
+
+//,---------------------------------------------------------------------
+//| Time parameters
+//`---------------------------------------------------------------------
+real t = 0;
+int niter = 300;
+real dt = 1.e-3;
+
+//,---------------------------------------------------------------------
+//| Keller-Segel data
+//`---------------------------------------------------------------------
+// real k0=1, k1=0.2, k2=1, k3=0.1, k4=1;
+real k0=1, k1=1, k2=1, k3=1, k4=1;
+
+// real alpha=30, X0=0.3, Y0=0.3;
+real C0=500, C1=30, X0=0.0, Y0=0.0;
+real infU = 5;
+func initialUGaussian = infU + C0*exp( -C1*( (x-X0)^2 + (y-Y0)^2 ) );
+u0 = initialUGaussian;
+v0 = 0.5*u0;
+
+bool printResults = true; if(printResults) {
+  real uInt = int2d(Th)(u0); real vInt = int2d(Th)(v0);
+  cout << "int_Th(u0) = " << uInt << "  int_Th(v0) = " << vInt << endl;
+ }
+
+real integralU0=int2d(Th)(u0);
+cout <<"La integral del dato inicial es "<< integralU0 << "(4*pi=" << 4*pi << ")" << endl;
+
+string testName = "KS_" +
+  "dt:" + dt + "_nx:" + nx +
+  "_k0" + k0 + "_k1:" + k1 + "_k2:" + k2 + "_k3:" + k3 + "_k4:" + k4;
+cout << "Running test " << testName << endl;
+
+
+// Macros..............................................................>
+macro grad(u) [ dx(u), dy(u) ] // End of Macro
+  ; // for emacs :)
+macro div(u,v) ( dx(u) + dy(v) ) // End of Macro
+  ; // for emacs :)
+
+// ---------------------------------------------------------------------
+// Upwinding of the Transport matrix, K.
+//
+// Macro stores the result in the matrix Kupw.
+//
+// See "High-Order Local Maximum Principle Preserving (MPP)
+// Discontinuous Galerkin Finite Element Method for the Transport
+// Equation". R. Anderson, V. Dobrev, Tz. Kolev, D. Kuzmin, M. Quezada
+// de Luna, R. Rieben and V. Tomov
+// ---------------------------------------------------------------------
+NewMacro upwindTransport(K, Kupw)
+{
+  int[int] I(1),J(1); real[int] C(1);
+  [I,J,C]=K; // get the sparse terms of the matrix K (the arrays are resized)
+  int n=K.n;
+  int k=0;
+  for(int i=0; i<n; i++) {
+    Kupw(i,i) = K(i,i);
+    // cout << "K_ii=" << Kupw(i,i) << endl;
+    while(I[k]==i) {
+      // cout << "k=" << k << endl;
+      int j = J[k];
+      if(i!=j) {
+	real tmp = max(0.0, max(-K(i,j), -K(j,i)));  // max(0,-K(i,j), -K(j,i))1
+	Kupw(i,j) = K(i,j) + tmp;
+	Kupw(i,i) = Kupw(i,i) - tmp;
+      }
+      k++;
+      if(k==I.n) break;
+    }
+  }
+} EndMacro;
+;
+
+// (Coninuous FEM) Keller Segel problem ·······································
+problem KellerSegelU(u,ub)=
+  int2d(Th)( u*ub/dt + k0*grad(u)'*grad(ub) )
+  + int2d(Th)( - u0*ub/dt - k1*u0*grad(v)'*grad(ub) );
+problem KellerSegelV(v,vb)=
+  int2d(Th)( v*vb/dt + k2*grad(v)'*grad(vb) + k3*v*vb )
+  + int2d(Th)( - v0*vb/dt - k4*u0*vb );
+
+// Bilinear form for mass matrix
+varf varfMass(u,ub) = int2d(Th) ( u*ub );
+
+// Bilinear form for lumped mass matrix
+varf varfMassLump(u,ub) = int2d(Th, qft=qf1pTlump) ( u*ub );
+
+// Bilinear form for diffusion stiffness matrix
+varf varfDiffusion(u,ub) = int2d(Th) ( grad(u)'*grad(ub) );
+
+// Bilinear form for convection matrix
+varf varfChemotaxisConvect(u, ub) = int2d(Th)( u*grad(v)'*grad(ub) );
+// varf varfChemotaxisConvect(u, ub) = int2d(Th)( u*dx(v)*dx(ub) + u*dy(v)*dy(ub) );
+
+
+//,---------------------------------------------------------------------
+//| Time loop
+//`---------------------------------------------------------------------
+
+// 1) Time-independent computation
+matrix Mu = varfMassLump(Uh, Uh);   // Mass matrix
+matrix Lu = varfDiffusion(Uh,Uh); // Diffusion matrix
+matrix Mv=Mu, Lv=Lu; // Asuming same basis for u and v !!!
+
+matrix A0u = Mu + dt*Lu;
+matrix Av = (1+dt)*Mv + dt*Lv;
+
+// 1) Time-dependent computation
+for (int k=1; k<=niter; k++) {
+  t=t+dt;
+  cout << "iter = " << k << "\t (t = " << t << ")" << endl;
+
+  // Solve system for u and v ·················································
+  // KellerSegelV; // Compute v from u0
+  // KellerSegelU; // Compute v from u0
+
+  // Solve system for v ·······················································
+  real[int] F1v = Mv*v0[];
+  real[int] F2v = Mu*u0[];
+  real[int] Fv = F1v + dt*F2v;
+
+  set(Av, solver=UMFPACK);
+  v[] = Av^-1*Fv;
+
+  // Solve system for u ·······················································
+  real[int] Fu = Mu*u0[];
+
+  matrix Ku = varfChemotaxisConvect(Uh, Uh); // Convection matrix
+  matrix Kupw = Ku; // Upwinded convection matrix
+  upwindTransport(Ku, Kupw); // Make upwinding into Kupw matrix
+  matrix Au = A0u + (-dt)*Kupw;
+
+  set(Au, solver=UMFPACK);
+  u[] = Au^-1*Fu;
+
+  if(printResults) {
+    real uMax = u[].max; real uMin=u[].min;
+    real vMax = v[].max; real vMin=v[].min;
+    cout << "  max(u) = " << uMax << "  min(u) = " << uMin
+	 << (uMin<0 ? " ...---... (u) Positivity broken!!!" : "") << endl;
+    if(uMax>1.e+10) {
+      cout << "BLOW UP FOUND!!" << endl;
+      break;
+    }
+    cout << "  max(v) = " << vMax << "  min(v) = " << vMin
+	 << (vMin<0 ? " ...---... (v) Positivity broken!!!" : "") << endl;
+    real uInt = int2d(Th)(u); real vInt = int2d(Th)(v);
+    cout << "  int_Th(u) = " << uInt << "  int_Th(v) = " << vInt << endl;
+  }
+
+  u0 = u;  // Prepare next iteration
+  v0 = v;
+
+  bool plotResults = true; if(plotResults) {
+    plot(u, value=1, fill=1, dim=3);
+    // plot(v, value=1, fill=1, dim=3);
+  }
+
+  bool plotToVTK=false; if(plotToVTK) {
+    string vtkFile="/tmp/" + testName + ".vtk";
+    int[int] vtkOrder=[0];
+    savevtk(vtkFile, Th, u, v, dataname="u v", order=vtkOrder);
+  }
+
+ }
