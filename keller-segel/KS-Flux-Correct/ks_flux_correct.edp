@@ -21,7 +21,7 @@ Vh v, vb, v0;
 //`---------------------------------------------------------------------
 real t = 0;
 int niter = 300;
-real dt = 1.e-2;
+real dt = 1.e-4;
 
 //,---------------------------------------------------------------------
 //| Keller-Segel data
@@ -30,7 +30,7 @@ real dt = 1.e-2;
 real k0=1, k1=100, k2=1, k3=1, k4=1;
 
 // real alpha=30, X0=0.3, Y0=0.3;
-real C0=500, C1=30, X0=0.0, Y0=0.0;
+real C0=500, C1=10, X0=0.0, Y0=0.0;
 real infU = 0;
 func initialUGaussian = infU + C0*exp( -C1*( (x-X0)^2 + (y-Y0)^2 ) );
 u0 = initialUGaussian;
@@ -39,16 +39,17 @@ v0 = 0.5*u0;
 bool printResults = true; if(printResults) {
   real uMax = u0[].max; real uMin=u0[].min;
   real vMax = v0[].max; real vMin=v0[].min;
+  cout << "Dato inicial:" << endl;
   cout << "  max(u0) = " << uMax << "  min(u0) = " << uMin
        << (uMin<0 ? " ...---... (u) Positivity broken!!!" : "") << endl;
   cout << "  max(v0) = " << vMax << "  min(v0) = " << vMin
        << (vMin<0 ? " ...---... (v) Positivity broken!!!" : "") << endl;
  real uInt = int2d(Th)(u0); real vInt = int2d(Th)(v0);
-  cout << "int_Th(u0) = " << uInt << "  int_Th(v0) = " << vInt << endl;
+  cout << "  int_Th(u0) = " << uInt << "  int_Th(v0) = " << vInt << endl;
  }
 
 real integralU0=int2d(Th)(u0);
-cout <<"La integral del dato inicial es "<< integralU0 << "(4*pi=" << 4*pi << ")" << endl;
+cout <<"La integral del dato inicial es "<< integralU0 << " (4*pi=" << 4*pi << ")" << endl;
 
 string testName = "KS_" +
   "dt:" + dt + "_nx:" + nx +
@@ -159,11 +160,12 @@ varf varfChemotaxisConvect(u, ub) = int2d(Th)( u*grad(v)'*grad(ub) );
 //`---------------------------------------------------------------------
 
 // 1) Time-independent computation
-matrix Mu = varfMassLump(Uh, Uh);   // Mass matrix
+matrix Mu = varfMassLump(Uh,Uh);   // Mass matrix
 matrix Lu = varfDiffusion(Uh,Uh); // Diffusion matrix
 matrix Mv=Mu, Lv=Lu; // Asuming same basis for u and v !!!
 
-matrix A0u = Mu + dt*k0*Lu;
+// matrix A0u = Mu + dt*k0*Lu;
+matrix A0u = Mu;
 matrix Av = (1+dt*k3)*Mv + dt*k2*Lv;
 
 // 1) Time-dependent computation
@@ -187,6 +189,7 @@ for (int k=1; k<=niter; k++) {
   real[int] Fu = Mu*u0[];
 
   matrix Ku = varfChemotaxisConvect(Uh, Uh); // Convection matrix
+  Ku = k1*Ku + (-k0)*Lu;
 
   // // Añadir difusión artificial: Posibilidad 1
   // matrix Kupw = Ku; // Upwinded convection matrix
@@ -194,16 +197,15 @@ for (int k=1; k<=niter; k++) {
   // matrix Au = A0u + (-dt*k1)*Kupw;
 
   // Añadir difusión artificial: Posibilidad 2
-  matrix Ktranspose = Ku';
-  matrix Ktmp = Ku + Ktranspose;
   int[int] I(1),J(1); real[int] C(1);
-  [I,J,C] = Ktmp;
+  [I,J,C] = Ku;
   C = 0;
   matrix D=[I,J,C];
   computeArtificialDiffusion(Ku, D); // D <- artificial diffusion
   // cout << "D=" << D << endl;
   Ku = Ku + D;
-  matrix Au = A0u + (-dt*k1)*Ku;
+  // matrix Au = A0u + (-dt*k1)*Ku;
+  matrix Au = A0u + (-dt)*Ku;
 
   set(Au, solver=UMFPACK);
   u[] = Au^-1*Fu;
