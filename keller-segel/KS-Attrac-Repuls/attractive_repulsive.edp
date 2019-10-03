@@ -5,7 +5,7 @@ verbosity=0;
 //`---------------------------------------------------------------------
 real R=1.5;
 border Gamma(t=0, 2*pi) { x=R*cos(t);  y=R*sin(t); };
-int nx = 200;
+int nx = 600;
 mesh Th = buildmesh(Gamma(nx));
 //,---------------------------------------------------------------------
 // Square mesh
@@ -39,15 +39,14 @@ bool forcePositivity=false;
 // real k0=1, k1=0.2, k2=1, k3=0.1, k4=1;
 real ChiAttraction=1,    XiRepulsion=1;
 real alpha=1, beta=1, gamma=1, delta=1;
-real r=1, s=1;
+real r=1, s=1.7;
 
 // real alpha=30, x0=0.3, y0=0.3;
-real C0=100, C1=30, x0=0.0, y0=0.0;
+real C0=20, C1=30, x0=0.0, y0=0.0;
 real infU = 2;
 func initialUGaussian = infU + C0*exp( -C1*( (x-x0)^2 + (y-y0)^2 ) );
 func initialURiemann = x<0;
 u0 = initialUGaussian;
-u0s = pow(u0, s);
 v0 = 0.5*u0;
 w0 = 0.5*u0;
 
@@ -100,6 +99,7 @@ for (int k=1; k<=niter; k++) {
   t=t+dt;
   cout << "iter = " << k << "\t (t = " << t << ")" << endl;
 
+  u0s = pow(u0, s);
   KSAttRepV; // Compute v
   if(forcePositivity) { v = max(0, v); }
 
@@ -109,7 +109,6 @@ for (int k=1; k<=niter; k++) {
   KSAttRepU; // Compute u from u,v
   if(forcePositivity) { u = max(0, u); }
 
-  u0s = pow(u0, s);
   // solve Problem(u, ub)=
   //   int2d(Th)(u*ub)
   //   - int2d(Th)(1*ub);
@@ -124,18 +123,18 @@ for (int k=1; k<=niter; k++) {
     real vMax = v[].max; real vMin=v[].min;
     real wMax = w[].max; real wMin=w[].min;
     cout << "  max(u) = " << uMax << "  min(u) = " << uMin
-	 << (uMin<0 ? " ...---... u: Positivity broken!!!" : "") << endl;
+  	 << (uMin<0 ? " ...---... u: Positivity broken!!!" : "") << endl;
     if(uMax>1.e+10) {
       cout << "BLOW UP FOUND!!" << endl;
       break;
     }
     cout << "  max(v) = " << vMax << "  min(v) = " << vMin
-	 << (vMin<0 ? " ...---... v: Positivity broken!!!" : "") << endl;
+  	 << (vMin<0 ? " ...---... v: Positivity broken!!!" : "") << endl;
     cout << "  max(w) = " << wMax << "  min(w) = " << wMin
-	 << (wMin<0 ? " ...---... w: Positivity broken!!!" : "") << endl;
+  	 << (wMin<0 ? " ...---... w: Positivity broken!!!" : "") << endl;
     real uInt = int2d(Th)(u); real vInt = int2d(Th)(v); real wInt = int2d(Th)(w);
     cout << "  int_Th(u) = " << uInt << "  int_Th(v) = " << vInt
-	 << "  int_Th(w) = " << wInt << endl;
+  	 << "  int_Th(w) = " << wInt << endl;
     cout << "  inf(v0)*exp(-beta *t) = " << infU*exp(-beta*t) << endl;
     cout << "  delta*int(w) - gamma*int(u^r) ***trampa, solo r=1*** = " << delta*wInt - gamma*uInt << endl;
   }
