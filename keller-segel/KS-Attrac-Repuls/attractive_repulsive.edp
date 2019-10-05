@@ -3,9 +3,10 @@ verbosity=0;
 //,---------------------------------------------------------------------
 // Circle mesh
 //`---------------------------------------------------------------------
-real R=1.5;
+// real R=1.5;
+real R=2;
 border Gamma(t=0, 2*pi) { x=R*cos(t);  y=R*sin(t); };
-int nx = 600;
+int nx = 1600;
 mesh Th = buildmesh(Gamma(nx));
 //,---------------------------------------------------------------------
 // Square mesh
@@ -50,6 +51,11 @@ u0 = initialUGaussian;
 v0 = 0.5*u0;
 w0 = 0.5*u0;
 
+// x0 = 1;
+// v0 = infU + C0*exp( -C1*( (x-x0)^2 + (y-y0)^2 ) );
+// x0 = -1;
+// w0 = infU + C0*exp( -C1*( (x-x0)^2 + (y-y0)^2 ) );
+
 // func initialU = 1.15*exp(-x^2-y^2)*(4-x^2)^2*(4-y^2)^2;
 // func initialV = 0.55*exp(-x^2-y^2)*(4-x^2)^2*(4-y^2)^2;
 // u0 = initialU;
@@ -90,7 +96,7 @@ problem KSAttRepV(v,vb)=
 // Keller Segel problem / w
 problem KSAttRepW(w,wb)=
   int2d(Th)( tau*w*wb/dt + grad(w)'*grad(wb) + delta*w*wb )
-  + int2d(Th)( - gamma*u0*wb
+  + int2d(Th)( - gamma*u0r*wb
 	       - tau*w0*wb/dt );
 
 // Time loop ###################################################
@@ -103,6 +109,7 @@ for (int k=1; k<=niter; k++) {
   KSAttRepV; // Compute v
   if(forcePositivity) { v = max(0, v); }
 
+  u0r = pow(u0, r);
   KSAttRepW; // Compute w
   if(forcePositivity) { w = max(0, w); }
 
@@ -112,11 +119,6 @@ for (int k=1; k<=niter; k++) {
   // solve Problem(u, ub)=
   //   int2d(Th)(u*ub)
   //   - int2d(Th)(1*ub);
-
-  u0 = u;  // Prepare next iteration
-  // u0s = pow(u0, 0.2);
-  v0 = v;
-  if(tau != 0) { w0 = w; }
 
   bool printResults = true; if(printResults) {
     real uMax = u[].max; real uMin=u[].min;
@@ -133,16 +135,20 @@ for (int k=1; k<=niter; k++) {
     cout << "  max(w) = " << wMax << "  min(w) = " << wMin
   	 << (wMin<0 ? " ...---... w: Positivity broken!!!" : "") << endl;
     real uInt = int2d(Th)(u); real vInt = int2d(Th)(v); real wInt = int2d(Th)(w);
+    u0r = pow(u,r);
+    real w0Int = int2d(Th)(w0);
+    cout << "    w0Int:" << w0Int << endl;
+    real residuo = tau*(int2d(Th)(w)-int2d(Th)(w0))/dt + delta*wInt - gamma*int2d(Th)(u0r);
     cout << "  int_Th(u) = " << uInt << "  int_Th(v) = " << vInt
   	 << "  int_Th(w) = " << wInt << endl;
     cout << "  inf(v0)*exp(-beta *t) = " << infU*exp(-beta*t) << endl;
-    cout << "  delta*int(w) - gamma*int(u^r) ***trampa, solo r=1*** = " << delta*wInt - gamma*uInt << endl;
+    cout << "  delta*int(w) - gamma*int(u^r) " << residuo << endl;
   }
 
   bool plotResults = true; if(plotResults) {
-    plot(u, cmm="U", value=1, fill=1, dim=3);
-    plot(v, cmm="V", value=1, fill=1, dim=3);
-    plot(w, cmm="W", value=1, fill=1, dim=3);
+    plot(u, cmm="U", value=1, fill=1, dim=3, wait=1);
+    plot(v, cmm="V", value=1, fill=1, dim=3, wait=1);
+    plot(w, cmm="W", value=1, fill=1, dim=3, wait=1);
   }
 
   bool saveToVTK=false; if(saveToVTK) {
@@ -151,5 +157,10 @@ for (int k=1; k<=niter; k++) {
     int[int] vtkOrder=[0];
     savevtk(vtkFile, Th, u, v, w, dataname="u v w", order=vtkOrder);
   }
+
+  u0 = u;  // Prepare next iteration
+  // u0s = pow(u0, 0.2);
+  v0 = v;
+  if(tau != 0) { w0 = w; }
 
  }
