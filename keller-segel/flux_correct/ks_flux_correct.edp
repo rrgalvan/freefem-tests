@@ -7,7 +7,7 @@ cout.precision(10);
 //`---------------------------------------------------------------------
 real R=1.5;
 border Gamma(t=0, 2*pi) { x=R*cos(t);  y=R*sin(t); };
-int nx = 200;
+int nx = 16;
 mesh Th = buildmesh(Gamma(nx));
 
 // Unknown and test functions
@@ -20,17 +20,17 @@ Vh v, vb, v0;
 //| Time parameters
 //`---------------------------------------------------------------------
 real t = 0;
-int niter = 300;
+int niter = 10;
 real dt = 1.e-4;
 
 //,---------------------------------------------------------------------
 //| Keller-Segel data
 //`---------------------------------------------------------------------
 // real k0=1, k1=0.2, k2=1, k3=0.1, k4=1;
-real k0=1, k1=100, k2=1, k3=1, k4=1;
+real k0=1, k1=1, k2=1, k3=1, k4=1;
 
 // real alpha=30, X0=0.3, Y0=0.3;
-real C0=500, C1=10, X0=0.0, Y0=0.0;
+real C0=5.e5, C1=10, X0=0.0, Y0=0.0;
 real infU = 0;
 func initialUGaussian = infU + C0*exp( -C1*( (x-X0)^2 + (y-Y0)^2 ) );
 u0 = initialUGaussian;
@@ -44,7 +44,7 @@ bool printResults = true; if(printResults) {
        << (uMin<0 ? " ...---... (u) Positivity broken!!!" : "") << endl;
   cout << "  max(v0) = " << vMax << "  min(v0) = " << vMin
        << (vMin<0 ? " ...---... (v) Positivity broken!!!" : "") << endl;
- real uInt = int2d(Th)(u0); real vInt = int2d(Th)(v0);
+  real uInt = int2d(Th)(u0); real vInt = int2d(Th)(v0);
   cout << "  int_Th(u0) = " << uInt << "  int_Th(v0) = " << vInt << endl;
  }
 
@@ -53,7 +53,7 @@ cout <<"La integral del dato inicial es "<< integralU0 << " (4*pi=" << 4*pi << "
 
 string testName = "KS_" +
   "dt:" + dt + "_nx:" + nx +
-  "_k0" + k0 + "_k1:" + k1 + "_k2:" + k2 + "_k3:" + k3 + "_k4:" + k4;
+  "_k0:" + k0 + "_k1:" + k1 + "_k2:" + k2 + "_k3:" + k3 + "_k4:" + k4;
 cout << "Running test " << testName << endl;
 
 
@@ -111,6 +111,10 @@ NewMacro upwindTransport(K, Kupw)
 // ---------------------------------------------------------------------
 NewMacro computeArtificialDiffusion(K, D)
 {
+  int[int] I(1),J(1); real[int] C(1);
+  [I,J,C] = K;
+  C = 0;
+  D=[I,J,C];
   int n=K.n;
   int k=0;
   for(int i=0; i<n; i++) {
@@ -154,19 +158,25 @@ varf varfDiffusion(u,ub) = int2d(Th) ( grad(u)'*grad(ub) );
 varf varfChemotaxisConvect(u, ub) = int2d(Th)( u*grad(v)'*grad(ub) );
 // varf varfChemotaxisConvect(u, ub) = int2d(Th)( u*dx(v)*dx(ub) + u*dy(v)*dy(ub) );
 
-
 //,---------------------------------------------------------------------
 //| Time loop
 //`---------------------------------------------------------------------
 
 // 1) Time-independent computation
-matrix Mu = varfMassLump(Uh,Uh);   // Mass matrix
-matrix Lu = varfDiffusion(Uh,Uh); // Diffusion matrix
-matrix Mv=Mu, Lv=Lu; // Asuming same basis for u and v !!!
+matrix M = varfMass(Uh,Uh);   // Mass matrix
+matrix ML = varfMassLump(Uh,Uh);   // Mass lumped matrix
+matrix L = varfDiffusion(Uh,Uh); // Diffusion matrix
 
-// matrix A0u = Mu + dt*k0*Lu;
-matrix A0u = Mu;
-matrix Av = (1+dt*k3)*Mv + dt*k2*Lv;
+// matrix A0u = ML + dt*k0*L;
+matrix A0u = ML;
+matrix Av = (1+dt*k3)*ML + dt*k2*L;
+
+string matrixDir="./";
+bool saveMatrices=true; if(saveMatrices) {
+  {ofstream f( matrixDir + "M.matrix.coo"); f << M; }
+  {ofstream f( matrixDir + "ML.matrix.coo"); f << ML; }
+  {ofstream f( matrixDir + "L.matrix.coo"); f << L; }
+ }
 
 // 1) Time-dependent computation
 for (int k=1; k<=niter; k++) {
@@ -177,39 +187,43 @@ for (int k=1; k<=niter; k++) {
   // KellerSegelV; // Compute v from u0
   // KellerSegelU; // Compute v from u0
 
-  // Solve system for v ·······················································
-  real[int] F1v = Mv*v0[];
-  real[int] F2v = Mu*u0[];
-  real[int] Fv = F1v + dt*k4*F2v;
+  // ==========================================================================
+  // 1) Compute low order solutions
+  // ==========================================================================
 
+  // Solve system for v ·······················································
+
+  real[int] F1v = ML*v0[];
+  real[int] F2v = ML*u0[];
+  real[int] Fv  = F1v + dt*k4*F2v;
+
+  // Compute low order solution
   set(Av, solver=UMFPACK);
   v[] = Av^-1*Fv;
 
   // Solve system for u ·······················································
-  real[int] Fu = Mu*u0[];
 
-  matrix Ku = varfChemotaxisConvect(Uh, Uh); // Convection matrix
-  Ku = k1*Ku + (-k0)*Lu;
+  // Compute convection
+  matrix K = varfChemotaxisConvect(Uh, Uh); // - Convection matrix (in RHS)
+  K = k1*K + (-k0)*L; // Complete operator (on RHS)
+  // matrix KL=K;
+  matrix KL = K; // Matrix where will be computed the low order matrix (in RHS)
+  // Add artficial diffusion to KL
+  matrix D;
+  computeArtificialDiffusion(KL, D); // D <- artificial diffusion
+  KL = KL + D;
 
-  // // Añadir difusión artificial: Posibilidad 1
-  // matrix Kupw = Ku; // Upwinded convection matrix
-  // upwindTransport(Ku, Kupw); // Make upwinding into Kupw matrix
-  // matrix Au = A0u + (-dt*k1)*Kupw;
-
-  // Añadir difusión artificial: Posibilidad 2
-  int[int] I(1),J(1); real[int] C(1);
-  [I,J,C] = Ku;
-  C = 0;
-  matrix D=[I,J,C];
-  computeArtificialDiffusion(Ku, D); // D <- artificial diffusion
-  // cout << "D=" << D << endl;
-  Ku = Ku + D;
-  // matrix Au = A0u + (-dt*k1)*Ku;
-  matrix Au = A0u + (-dt)*Ku;
-
+  // Compute low order solution
+  matrix Au = A0u + (-dt)*KL;
+  real[int] Fu = ML*u0[];
   set(Au, solver=UMFPACK);
   u[] = Au^-1*Fu;
 
+  if(saveMatrices) {
+    {ofstream f( matrixDir + "K.matrix.coo"); f << K; }
+    {ofstream f( matrixDir + "D.matrix.coo"); f << D; }
+    {ofstream f( matrixDir + "KL.matrix.coo"); f << KL; }
+  }
   if(printResults) {
     real uMax = u[].max; real uMin=u[].min;
     real vMax = v[].max; real vMin=v[].min;
@@ -224,6 +238,222 @@ for (int k=1; k<=niter; k++) {
     real uInt = int2d(Th)(u); real vInt = int2d(Th)(v);
     cout << "  int_Th(u) = " << uInt << "  int_Th(v) = " << vInt << endl;
   }
+
+  // ==========================================================================
+  // 2) Update to high order solutions
+  // ==========================================================================
+
+  // 0. Compute residuals, f_ij = (m_ij + d_ij)*(u_j-u_i)
+  matrix FF = M + (-1)*ML + (-dt)*D;
+  int[int] IF(1), JF(1); real[int] CF(1);
+  [IF,JF,CF] = FF; // get the sparse terms of the matrix (the arrays are resized)
+  int n=FF.n;
+
+  // Let UU(i,j) = u[](j)-u[](i), for each i!=j (where f_ij!=0):
+  matrix UU = FF;
+  int[int] IU(1), JU(1); real[int] CU(1);
+  [IU,JU,CU] = UU; // get the sparse terms of the matrix (the arrays are resized)
+  {
+    int k=0;
+    for(int i=0; i<n; i++) {
+      while(IU[k]==i) {
+	int j = JU[k];
+	// CU[k] = u[](j)-u[](i);  // Uij = u_j - u_i
+	UU(i,j) = u[](j)-u[](i);  // Uij = u_j - u_i
+	k++; if(k==IU.n) break;
+      }
+    }
+  }
+  // Let FF_{ij} = FF_{ij}*(u_j - u_i)
+  // CF = CF.*CU;
+  // FF = [IF, JF, CF];
+
+  // Let  FF_ij=0 if FF_ij*(u_j-u_i) > 0
+  {
+    int k=0;
+    for(int i=0; i<n; i++) {
+      while(IF[k]==i) {
+	int j = JF[k];
+	FF(i,j) *= UU(i,j);
+	k++; if(k==IF.n) break;
+      }
+    }
+  }
+  if(saveMatrices) {
+    { ofstream f( matrixDir + "FF_previous.matrix.coo"); f << FF; }
+  }
+
+  // Let  FF_ij=0 if FF_ij*(u_j-u_i) > 0
+  {
+    int k=0;
+    for(int i=0; i<n; i++) {
+      while(IF[k]==i) {
+	int j = JF[k];
+	real Uij = u[](j)-u[](i);  // Uij = u_j - u_i
+	if(FF(i,j)*Uij > 0) { FF(i,j) = 0; }
+	k++; if(k==IF.n) break;
+      }
+    }
+  }
+
+  if(saveMatrices) {
+    {ofstream f( matrixDir + "UU.matrix.coo"); f << UU; }
+    {ofstream f( matrixDir + "FF.matrix.coo"); f << FF; }
+  }
+
+  // 1. Compute the +,- sums of antidifusive fluxes to node i
+  real[int] Pplus(n), Pminus(n);
+  {
+    int k=0;
+    for(int i=0; i<n; i++) {
+      real sumPlus=0, sumMinus=0;
+      while(IF[k]==i) {
+	int j = JF[k];
+	if(i!=j) {
+	  sumPlus  += (FF(i,j) > 0 ? FF(i,j) : 0);
+	  sumMinus += (FF(i,j) < 0 ? FF(i,j) : 0);
+	}
+	k++; if(k==IF.n) break;
+      }
+      Pplus[i] = sumPlus;
+      Pminus[i] = sumMinus;
+    }
+  }
+  if(verbosity>10) {
+    cout << "Pplus =" << Pplus << endl;
+    cout << "Pminus=" << Pminus << endl;
+  }
+
+  // 2. Compute distance to a local extrema of u
+  real[int] Qplus(n), Qminus(n);
+  {
+    int k=0;
+    for(int i=0; i<n; i++) {
+      real qMax=0, qMin=0;
+      while(IU[k]==i) {
+	int j = JU[k];
+	if(i!=j) {
+	  real diff = UU(i,j); // u_j - u_i
+	  if ( diff > qMax ) { qMax = diff; }
+	  if ( diff < qMin ) { qMin = diff; }
+	}
+	k++;
+	if(k==IU.n) break;
+      }
+      Qplus[i] = qMax;
+      Qminus[i] = qMin;
+    }
+  }
+  if(verbosity>10) {
+    cout << "Qplus =" << Qplus << endl;
+    cout << "Qminus=" << Qminus << endl;
+  }
+
+  // 3. Compute the nodal correction factors for node i
+  real[int] Rplus(n), Rminus(n);
+  {
+    real toleranceZero=1.e-17;
+    for(int i=0; i<n; i++) {
+      // Compute Rplus
+      if(abs(Pplus[i])<toleranceZero) {
+	Rplus[i] = 0;
+      }
+      else {
+	real MiOverDt = ML(i,i)/dt;
+	real factor = MiOverDt * Qplus[i]/Pplus[i];
+	Rplus[i] = min(1., factor);
+      }
+      // Compute Rminus
+      if(abs(Pminus[i])<toleranceZero) {
+	Rminus[i] = 0;
+      }
+      else {
+	real MiOverDt = ML(i,i)/dt;
+	real factor = MiOverDt * Qminus[i]/Pminus[i];
+	Rminus[i] = min(1., factor);
+      }
+    }
+  }
+  if(verbosity>10) {
+    cout << "Rplus =" << Rplus << endl;
+    cout << "Rminus=" << Rminus << endl;
+  }
+
+  // 4. Define the correction factor
+  real[int,int] tmpv(n,n);
+  tmpv=1;
+  matrix alpha=tmpv;
+  {
+    int k=0;
+    for(int i=0; i<n; i++) {
+      for(int j=0; j<n; j++) {
+	alpha(i,j) = min(Rminus[i], Rplus[j]);
+	i+j;
+      }
+      while(IF[k]==i) {
+	int j = JF[k];
+	if(FF(i,j)>0) {
+	  alpha(i,j) = min(Rplus[i], Rminus[j]);
+	}
+	k++; if(k==IF.n) break;
+      }
+    }
+  }
+  if(saveMatrices) {
+    {ofstream f( matrixDir + "alpha.matrix.coo"); f << alpha; }
+  }
+
+  // Compute new mass matrix, M^*
+  matrix Mstar = M;
+  {
+    int[int] I(1), J(1); real[int] C(1);
+    [I, J, C] = M;
+    int k=0;
+    for(int i=0; i<n; i++) {
+      real sum = 0.;
+      while(I[k]==i) {
+	int j = J[k];
+	if(i!=j) {
+	  Mstar(i,j) = alpha(i,j)*M(i,j);
+	  sum += Mstar(i,j);
+	}
+	k++; if(k==IF.n) break;
+      }
+      Mstar(i,i) = ML(i,i) - sum;
+    }
+  }
+  // Compute new convection matrix, K^*
+  matrix Kstar = K;
+  {
+    int[int] I(1), J(1); real[int] C(1);
+    [I, J, C] = K;
+    int k=0;
+    for(int i=0; i<n; i++) {
+      real sum = 0.;
+      while(I[k]==i) {
+	int j = J[k];
+	if(i!=j) {
+	  real correctionTerm = (1-alpha(i,j))*D(i,j);
+	  Kstar(i,j) = K(i,j) + correctionTerm;
+	  sum += correctionTerm;
+	}
+	k++; if(k==IF.n) break;
+      }
+      Kstar(i,i) = K(i,i) - sum;
+    }
+  }
+  if(saveMatrices) {
+    {ofstream f( matrixDir + "Mstar.matrix.coo"); f << Mstar; }
+    {ofstream f( matrixDir + "Kstar.matrix.coo"); f << Kstar; }
+  }
+
+  // Finally: high order solution!
+  Au = Mstar + (-dt)*Kstar;
+  Fu = Mstar*u0[];
+  set(Au, solver=UMFPACK);
+  u[] = Au^-1*Fu;
+
+  // ··········································································
 
   u0 = u;  // Prepare next iteration
   v0 = v;
