@@ -5,37 +5,46 @@ mesh Th=square(nx,nx);
 
 real[int,int] qq1=[ // w_i, x_baric_i, y_baric_i
 		   [1.,  1./3, 1./3] ];
+real[int,int] qq2=[ // w_i, x_baric_i, y_baric_i
+		   [1.,  1./4, 1./4] ];
 real[int,int] qq3=[ // w_i, x_baric_i, y_baric_i
 		   [1./3,  0, 0],
 		   [1./3,  1, 0],
 		   [1./3,  0, 1] ];
 
-QF2 qf1(1,qq1);
-QF2 qf3(1,qq3);
+QF2 qfBary(1,qq1);
+QF2 qfSpecial(1,qq2);
+QF2 qfVert(1,qq3);
 
 {
   real I0 = int2d(Th)(x^0);
-  real I1 = int2d(Th, qft=qf1)(x^0);
-  real I3 = int2d(Th, qft=qf3)(x^0);
+  real I1 = int2d(Th, qft=qfBary)(x^0);
+  real I2 = int2d(Th, qft=qfSpecial)(x^0);
+  real I3 = int2d(Th, qft=qfVert)(x^0);
   cout << "I0(1)=" << I0 << endl;
   cout << "I1(1)=" << I1 << endl;
+  cout << "I2(1)=" << I2 << endl;
   cout << "I3(1)=" << I3 << endl << endl;
 }
 
 {
   real I0 = int2d(Th)(x);
-  real I1 = int2d(Th, qft=qf1)(x);
-  real I3 = int2d(Th, qft=qf3)(x);
+  real I1 = int2d(Th, qft=qfBary)(x);
+  real I2 = int2d(Th, qft=qfSpecial)(x);
+  real I3 = int2d(Th, qft=qfVert)(x);
   cout << "I0(x)=" << I0 << endl;
   cout << "I1(x)=" << I1 << endl;
+  cout << "I2(x)=" << I2 << endl;
   cout << "I3(x)=" << I3 << endl << endl;
 }
 
 {
   real I0 = int2d(Th)(x^2);
-  real I1 = int2d(Th, qft=qf1)(x^2);
-  real I3 = int2d(Th, qft=qf3)(x^2);
+  real I1 = int2d(Th, qft=qfBary)(x^2);
+  real I2 = int2d(Th, qft=qfSpecial)(x^2);
+  real I3 = int2d(Th, qft=qfVert)(x^2);
   cout << "I0(x^2)=" << I0 << endl;
   cout << "I1(x^2)=" << I1 << endl;
+  cout << "I2(x^2)=" << I2 << endl;
   cout << "I3(x^2)=" << I3 << endl << endl;
 }

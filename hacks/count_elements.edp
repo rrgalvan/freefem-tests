@@ -1,0 +1,20 @@
+mesh Th=square(2,2); // 2x2 squares * 2 triangles = 8 elements
+
+// # 1 ##########################################
+
+{
+  fespace VhP0(Th, P0);
+  VhP0 u=1;
+  cout << "N'umero de elementos: " << u.n << endl;
+}
+
+// # 2 ##########################################
+
+{
+  int contador=0;
+  int2d(Th,
+	qft=qf1pT // Quadrature formula on barycenters
+	)( (contador++)*1. );
+
+  cout << "N'umero de elementos (hack #2): " << contador << endl;
+}

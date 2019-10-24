@@ -1,0 +1,41 @@
+mesh Th=square(2,2); // 2x2 squares * 2 triangles = 8 elements
+// plot(Th);
+
+fespace VhP0(Th, P0);
+VhP0 u;
+
+// Calculamos el área de todos los triángulos de Th
+real[int] areaTh(VhP0.nt);
+varf ComputeArea(unused, phiP0)= int2d(Th)(phiP0);
+areaTh = ComputeArea(0,VhP0);
+
+
+// Idea 1 ##########################################
+
+int contador=0;
+
+func real f(real x1, real x2) {
+  // Función simple que devuelve x1+x2.
+  //
+  // Como será evaluada sobre nodos de cuadratura,
+  // (x1,x2), también se imprime información sobre el
+  // triángulo actual
+  cout << "contador = " << contador++
+       << " triangle = " << nuTriangle << endl;
+  cout << " x = " << x1 << ", y = " << x2 << endl;
+  cout << " x+y = " << x+y << endl;
+
+  return x1+x2;
+}
+
+varf EvalFunction(unused, phiP0)=
+  int2d(Th,
+  	qft=qf1pT // Quadrature formula on barycenters
+  	)
+  (
+   f(x,y)/areaTh[nuTriangle] * phiP0
+   );
+
+u[] = EvalFunction(0,VhP0);
+
+cout << "u = " << u[] << endl;
