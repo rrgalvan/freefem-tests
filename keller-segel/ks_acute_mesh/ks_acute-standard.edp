@@ -1,0 +1,183 @@
+// Keller-Segel
+//
+// * Solved using standard FE techiques, but mass lumpng
+// * Matricies are mounted using "varf"
+//
+
+verbosity=0;
+load "iovtk";
+
+//,---------------------------------------------------------------------
+//| Keller-Segel data
+//`---------------------------------------------------------------------
+//>> Paremeter for acute mesh
+int nx = 100;
+string meshFile="acute_mesh_" + nx + "x" + nx + "_[-0.5,0.5]^2.msh";
+cout << "Reading mesh from " << meshFile << endl;
+mesh Th=readmesh(meshFile);
+
+//>> Paremeters from G. Viglialoro et al....
+// int nx=20
+// mesh Th = square(nx, nx, [4*x-2, 4*y-2]);
+// real k0=1, k1=0.2, k2=1, k3=0.1, k4=1;
+// u0 = 1.15*exp(-x^2-y^2)*(4-x^2)^2*(4-y^2)^2;
+// v0 = 0.55*exp(-x^2-y^2)*(4-x^2)^2*(4-y^2)^2;
+
+//>> Parameters from Y. Epshteyn & A. Kurganov...
+//>> Blow-up expected at t = 1.21·10^{−4}
+// int nx = 50; // Also nx=101
+// mesh Th = square(nx, nx, [ x-0.5, y-0.5 ]);
+real k0=1, k1=1, k2=1, k3=1, k4=1;
+func uInitCond = 1200*exp(-120*(x^2+y^2));
+func vInitCond = 600*exp(-60*(x^2+y^2));
+
+// Finite elements
+fespace Uh(Th, P1);
+Uh u, ub; // Unknown and test function
+Uh u0;
+fespace Vh(Th, P1);
+Vh v, vb, v0;
+
+//,---------------------------------------------------------------------
+//| Time parameters
+//`---------------------------------------------------------------------
+real t = 0;
+int niter = 300;
+real dt = 1.e-6;
+
+u0 = uInitCond;
+v0 = vInitCond;
+
+cout << "M'aximos y m'inimos de los datos iniciales:" << endl;
+{
+  u=u0; v=v0;
+real uMax = u[].max; real uMin=u[].min;
+real vMax = v[].max; real vMin=v[].min;
+cout << "  max(u) = " << uMax << "  min(u) = " << uMin
+<< (uMin<0 ? " ...---... Positivity broken!!!" : "") << endl;
+cout << "  max(v) = " << vMax << "  min(v) = " << vMin
+<< (vMin<0 ? " ...---... (V) Positivity broken!!!" : "") << endl;
+}
+real integralU0=int2d(Th)(u0);
+cout <<"La integral del dato inicial es "<< integralU0 << " (4*pi=" << 4*pi << ")" << endl;
+
+string testName = "KS_" +
+  "dt=" + dt + "_nx=" + nx +
+  "_k0=" + k0 + "_k1=" + k1 + "_k2=" + k2 + "_k3=" + k3 + "_k4=" + k4;
+cout << "Running test " << testName << endl;
+
+//,---------------------------------------------------------------------
+//| Variational problems
+//`---------------------------------------------------------------------
+
+// Macros..............................................................>
+macro grad(u) [ dx(u), dy(u) ] // End of Macro
+  ; // for emacs :)
+macro div(u,v) ( dx(u) + dy(v) ) // End of Macro
+  ; // for emacs :)
+
+// (Coninuous FEM) Keller Segel problem
+problem KellerSegelU(u,ub)=
+  int2d(Th)( u*ub/dt + k0*grad(u)'*grad(ub) )
+  + int2d(Th)( - u0*ub/dt - k1*u0*grad(v)'*grad(ub) );
+problem KellerSegelV(v,vb)=
+  int2d(Th)( v*vb/dt + k2*grad(v)'*grad(vb) + k3*v*vb )
+  + int2d(Th)( - v0*vb/dt - k4*u0*vb );
+
+
+// Linear form for variational formulation of convection
+// varf varfConvectThetaSchemeDG(unused,ub) =
+//   int2d(Th)(u0*ub/dt)
+//   + aUPW( -(1-theta), b, u0, ub ); // - aUPW in RHS
+
+// Bilinear form for mass matrix
+varf varfMassLump(u,ub) =
+  int2d(Th, qft=qf1pTlump) (u*ub);
+
+// Bilinear form for diffusion stiffness matrix
+varf varfDiffusion(u,ub) =
+  int2d(Th) ( grad(u)'*grad(ub) );
+
+varf varfChemotaxisExplicitV(u,ub)=
+  int2d(Th)( -u*grad(v0)'*grad(ub) );
+
+//,---------------------------------------------------------------------
+//| Time loop
+//`---------------------------------------------------------------------
+
+matrix Mu = varfMassLump(Uh, Uh);  // Mass matrix
+matrix Ku = varfDiffusion(Uh,Uh);  // Diffusion matrix
+matrix A;
+
+real uMax = 0, vMax=0;
+real blowUpTolerance=1.e+10;
+
+for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
+  t=t+dt;
+  cout << "iter = " << k << "\t (t = " << t << ")" << endl;
+
+  if(true) {
+    // 1) Compute u (live organism density) >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    // 1.a Define matrix
+    matrix Cu = varfChemotaxisExplicitV(Uh,Uh);
+    A = Mu + dt*k0*Ku + dt*k1*Cu;
+
+    // 1.b Define RHS
+    real[int] Fu = Mu*u0[];
+
+    // 1.c Solve system
+    set(A, solver=UMFPACK);
+    u[] = A^-1*Fu;
+
+    // 2) Compute v (chemoattractant density) >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    // 2.a Define matrix
+    A = (1 + dt*k3)*Mu + dt*k2*Ku; // Assuming Uh == Vh
+
+    // 2.b Define RHS
+    real[int] vAux= dt*k4*u[] + v0[]; // Assuming dim(Uh) == dim(Vh)
+    real[int] Fv = Mu*vAux; // Assuming Uh == Vh
+
+    // 2.c Solve system
+    set(A, solver=UMFPACK);
+    v[] = A^-1*Fv;
+
+  }
+
+  else {
+    // Solve system for u ······················································
+    KellerSegelU;   // Compute u
+
+    // Solve system for v ······················································
+    KellerSegelV;   // Compute v
+  }
+
+  // Post-process ····························································
+
+  uMax = u[].max; real uMin=u[].min;
+  vMax = v[].max; real vMin=v[].min;
+  cout << "  max(u) = " << uMax << "  min(u) = " << uMin
+       << (uMin<0 ? " ...---... Positivity broken!!!" : "") << endl;
+  cout << "  max(v) = " << vMax << "  min(v) = " << vMin
+       << (vMin<0 ? " ...---... (V) Positivity broken!!!" : "") << endl;
+  real uInt = int2d(Th)(u); real vInt = int2d(Th)(v);
+  cout << "  int_Th(u) = " << uInt << "  int_Th(v) = " << vInt << endl;
+
+  plot(v, value=1, fill=1, dim=3);
+
+  bool plotToVTK=true; if(plotToVTK) {
+    string vtkFile="/tmp/" + testName + ".vtk";
+    int[int] vtkOrder=[0];
+    savevtk(vtkFile, Th, u, v, dataname="u v", order=vtkOrder);
+  }
+
+  // Prepare next iteration
+  u0 = u;
+  v0 = v;
+
+ }
+
+if(uMax>=blowUpTolerance) cout << ">>>>> BLOW-UP FOUND at t = " << t
+			       << " (uMax = " << uMax << ", blow-up tolerance = "
+			       << blowUpTolerance << ")" << endl;
