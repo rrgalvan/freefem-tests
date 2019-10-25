@@ -6,13 +6,15 @@
 
 verbosity=0;
 load "iovtk";
+load "qf11to25" // Para definir nuevas fórmulas de cuadratura
 
 //,---------------------------------------------------------------------
 //| Keller-Segel data
 //`---------------------------------------------------------------------
 //>> Paremeter for acute mesh
-int nx = 100;
-string meshFile="acute_mesh_" + nx + "x" + nx + "_[-0.5,0.5]^2.msh";
+int nx = 50;
+string meshDir = "meshes/";
+string meshFile= meshDir + "acute_mesh_" + nx + "x" + nx + "_[-0.5,0.5]^2.msh";
 cout << "Reading mesh from " << meshFile << endl;
 mesh Th=readmesh(meshFile);
 
@@ -51,16 +53,18 @@ v0 = vInitCond;
 cout << "M'aximos y m'inimos de los datos iniciales:" << endl;
 {
   u=u0; v=v0;
-real uMax = u[].max; real uMin=u[].min;
-real vMax = v[].max; real vMin=v[].min;
-cout << "  max(u) = " << uMax << "  min(u) = " << uMin
-<< (uMin<0 ? " ...---... Positivity broken!!!" : "") << endl;
-cout << "  max(v) = " << vMax << "  min(v) = " << vMin
-<< (vMin<0 ? " ...---... (V) Positivity broken!!!" : "") << endl;
+  real uMax = u[].max; real uMin=u[].min;
+  real vMax = v[].max; real vMin=v[].min;
+  cout << "  max(u) = " << uMax << "  min(u) = " << uMin
+       << (uMin<0 ? " ...---... Positivity broken!!!" : "") << endl;
+  cout << "  max(v) = " << vMax << "  min(v) = " << vMin
+       << (vMin<0 ? " ...---... (V) Positivity broken!!!" : "") << endl;
 }
 real integralU0=int2d(Th)(u0);
-cout <<"La integral del dato inicial es "<< integralU0 << " (4*pi=" << 4*pi << ")" << endl;
-
+cout <<"La integral del dato inicial es "<< integralU0 <<
+  " (4*pi=" << 4*pi << ")" << endl;
+cout << "Condici'on CFL: dt = " << dt << ", h ~ " << (1./nx) <<
+  ", k/h ~ " << dt/(1./nx) << ", k/h^2 ~ " << dt/(1./nx)^2 << endl;
 string testName = "KS_" +
   "dt=" + dt + "_nx=" + nx +
   "_k0=" + k0 + "_k1=" + k1 + "_k2=" + k2 + "_k3=" + k3 + "_k4=" + k4;
@@ -98,8 +102,16 @@ varf varfMassLump(u,ub) =
 varf varfDiffusion(u,ub) =
   int2d(Th) ( grad(u)'*grad(ub) );
 
+// Bilinear form for chemotaxis
+// We use a special quadrature formula, so that u is evaluated
+// on an specific point, whose barycentric coords are (1/4,1/4,1/2)
+
+real[int,int] qfData=[ // w_i, x_baric_i, y_baric_i
+		      [1.,  1./4, 1./4] ];
+QF2 qfSpecial(1, qfData);
+
 varf varfChemotaxisExplicitV(u,ub)=
-  int2d(Th)( -u*grad(v0)'*grad(ub) );
+  int2d(Th, qft=qfSpecial)( -u*grad(v0)'*grad(ub) );
 
 //,---------------------------------------------------------------------
 //| Time loop
@@ -121,6 +133,7 @@ for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
 
     // 1.a Define matrix
     matrix Cu = varfChemotaxisExplicitV(Uh,Uh);
+    // cout << "Cu=" << Cu << endl;
     A = Mu + dt*k0*Ku + dt*k1*Cu;
 
     // 1.b Define RHS
