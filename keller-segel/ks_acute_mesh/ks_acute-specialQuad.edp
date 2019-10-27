@@ -8,11 +8,12 @@ verbosity=0;
 load "iovtk";
 load "qf11to25" // Para definir nuevas fórmulas de cuadratura
 
+include "getARGV.idp"; // Functions to read arguments from command line
+
 //,---------------------------------------------------------------------
 //| Keller-Segel data
 //`---------------------------------------------------------------------
-//>> Paremeter for acute mesh
-int nx = 50;
+int nx = getARGV("-nx", 50); // Default: nx=50
 string meshDir = "meshes/";
 string meshFile= meshDir + "acute_mesh_" + nx + "x" + nx + "_[-0.5,0.5]^2.msh";
 cout << "Reading mesh from " << meshFile << endl;
@@ -44,8 +45,8 @@ Vh v, vb, v0;
 //| Time parameters
 //`---------------------------------------------------------------------
 real t = 0;
-int niter = 300;
-real dt = 1.e-6;
+int niter = getARGV("-nt", 200);
+real dt = getARGV("-dt", 1.e-6);
 
 u0 = uInitCond;
 v0 = vInitCond;
