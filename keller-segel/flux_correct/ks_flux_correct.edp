@@ -2,13 +2,15 @@ verbosity=0;
 load "iovtk";
 cout.precision(10);
 
-//,---------------------------------------------------------------------
-// Circle mesh
-//`---------------------------------------------------------------------
-real R=1.5;
-border Gamma(t=0, 2*pi) { x=R*cos(t);  y=R*sin(t); };
-int nx = 16;
-mesh Th = buildmesh(Gamma(nx));
+// //,---------------------------------------------------------------------
+// // Circle mesh
+// //`---------------------------------------------------------------------
+// real R=1.5;
+// border Gamma(t=0, 2*pi) { x=R*cos(t);  y=R*sin(t); };
+// int nx = 16;
+// mesh Th = buildmesh(Gamma(nx));
+int nx=120;
+mesh Th = square(nx, nx, [x-0.5, y-0.5]);
 
 // Unknown and test functions
 fespace Uh(Th, P1);
@@ -20,8 +22,8 @@ Vh v, vb, v0;
 //| Time parameters
 //`---------------------------------------------------------------------
 real t = 0;
-int niter = 10;
-real dt = 1.e-4;
+int niter = 200;
+real dt = 1.e-6;
 
 //,---------------------------------------------------------------------
 //| Keller-Segel data
@@ -33,8 +35,19 @@ real k0=1, k1=1, k2=1, k3=1, k4=1;
 real C0=5.e5, C1=10, X0=0.0, Y0=0.0;
 real infU = 0;
 func initialUGaussian = infU + C0*exp( -C1*( (x-X0)^2 + (y-Y0)^2 ) );
-u0 = initialUGaussian;
-v0 = 0.5*u0;
+// u0 = initialUGaussian;
+// v0 = 0.5*u0;
+
+// // Epshteyn-Kurganov initial conditions:
+// func uInitCond = 1200*exp(-120*(x^2+y^2));
+// func vInitCond = 600*exp(-60*(x^2+y^2));
+// u0 = uInitCond;
+// v0 = vInitCond;
+// Chertok-Kurganov initial conditions:
+func uInitCond = 1000*exp(-100*(x^2+y^2));
+func vInitCond = 500*exp(-50*(x^2+y^2));
+u0 = uInitCond;
+v0 = vInitCond;
 
 bool printResults = true; if(printResults) {
   real uMax = u0[].max; real uMin=u0[].min;
@@ -172,7 +185,7 @@ matrix A0u = ML;
 matrix Av = (1+dt*k3)*ML + dt*k2*L;
 
 string matrixDir="./";
-bool saveMatrices=true; if(saveMatrices) {
+bool saveMatrices=false; if(saveMatrices) {
   {ofstream f( matrixDir + "M.matrix.coo"); f << M; }
   {ofstream f( matrixDir + "ML.matrix.coo"); f << ML; }
   {ofstream f( matrixDir + "L.matrix.coo"); f << L; }
@@ -204,10 +217,10 @@ for (int k=1; k<=niter; k++) {
   // Solve system for u ·······················································
 
   // Compute convection
-  matrix K = varfChemotaxisConvect(Uh, Uh); // - Convection matrix (in RHS)
-  K = k1*K + (-k0)*L; // Complete operator (on RHS)
+  matrix K = varfChemotaxisConvect(Uh, Uh); // - Convection matrix (at RHS)
+  K = k1*K + (-k0)*L; // Complete operator (at RHS)
   // matrix KL=K;
-  matrix KL = K; // Matrix where will be computed the low order matrix (in RHS)
+  matrix KL = K; // Matrix where will be computed the low order matrix (at RHS)
   // Add artficial diffusion to KL
   matrix D;
   computeArtificialDiffusion(KL, D); // D <- artificial diffusion
@@ -269,16 +282,16 @@ for (int k=1; k<=niter; k++) {
   // FF = [IF, JF, CF];
 
   // Let  FF_ij=0 if FF_ij*(u_j-u_i) > 0
-  {
-    int k=0;
-    for(int i=0; i<n; i++) {
-      while(IF[k]==i) {
-	int j = JF[k];
-	FF(i,j) *= UU(i,j);
-	k++; if(k==IF.n) break;
-      }
-    }
-  }
+  // {
+  //   int k=0;
+  //   for(int i=0; i<n; i++) {
+  //     while(IF[k]==i) {
+  // 	int j = JF[k];
+  // 	FF(i,j) *= UU(i,j);
+  // 	k++; if(k==IF.n) break;
+  //     }
+  //   }
+  // }
   if(saveMatrices) {
     { ofstream f( matrixDir + "FF_previous.matrix.coo"); f << FF; }
   }
