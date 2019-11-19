@@ -15,5 +15,5 @@ tests:
 summary:
 	for i in $(TESTS); do\
 		echo "Test nx=$$i =================>"; \
-		grep "max.u.* Positivity broken" test_nx=$$i.out -B1  | head -n2; \
+		grep "max.u.* Positivity broken" test_nx=$$i.out -A2  | head -n4; \
 	done

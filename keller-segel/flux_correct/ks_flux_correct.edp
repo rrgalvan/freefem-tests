@@ -9,7 +9,7 @@ cout.precision(10);
 // border Gamma(t=0, 2*pi) { x=R*cos(t);  y=R*sin(t); };
 // int nx = 16;
 // mesh Th = buildmesh(Gamma(nx));
-int nx=120;
+int nx=50;
 mesh Th = square(nx, nx, [x-0.5, y-0.5]);
 
 // Unknown and test functions
@@ -22,7 +22,7 @@ Vh v, vb, v0;
 //| Time parameters
 //`---------------------------------------------------------------------
 real t = 0;
-int niter = 200;
+int niter = 130;
 real dt = 1.e-6;
 
 //,---------------------------------------------------------------------
@@ -185,7 +185,7 @@ matrix A0u = ML;
 matrix Av = (1+dt*k3)*ML + dt*k2*L;
 
 string matrixDir="./";
-bool saveMatrices=false; if(saveMatrices) {
+bool saveMatrices=true; if(saveMatrices) {
   {ofstream f( matrixDir + "M.matrix.coo"); f << M; }
   {ofstream f( matrixDir + "ML.matrix.coo"); f << ML; }
   {ofstream f( matrixDir + "L.matrix.coo"); f << L; }
