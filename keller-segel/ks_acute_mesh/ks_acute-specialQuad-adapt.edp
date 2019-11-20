@@ -14,10 +14,17 @@ include "getARGV.idp"; // Functions to read arguments from command line
 //| Keller-Segel data
 //`---------------------------------------------------------------------
 int nx = getARGV("-nx", 50); // Default: nx=50
-string meshDir = "meshes/";
-string meshFile= meshDir + "acute_mesh_" + nx + "x" + nx + "_[-0.5,0.5]^2.msh";
-cout << "Reading mesh from " << meshFile << endl;
-mesh Th=readmesh(meshFile);
+int acuteMesh = getARGV("-acute", 1);
+mesh Th;
+if(acuteMesh) {
+  string meshDir = "meshes/";
+  string meshFile= meshDir + "acute_mesh_" + nx + "x" + nx + "_[-0.5,0.5]^2.msh";
+  cout << "Reading mesh from " << meshFile << endl;
+  Th=readmesh(meshFile);
+ }
+ else {
+   Th=square(nx, nx, [x-0.5, y-0.5]);
+ }
 
 //>> Paremeters from G. Viglialoro et al....
 // int nx=20
@@ -95,8 +102,8 @@ macro div(u,v) ( dx(u) + dy(v) ) // End of Macro
 // (Coninuous FEM) Keller Segel problem
 problem KellerSegelU(u,ub)=
   int2d(Th)( u*ub/dt + k0*grad(u)'*grad(ub) ) +
-  // int2d(Th, qft=qfSpecial)( -k1*u*grad(v0)'*grad(ub) )
-  int2d(Th)( -k1*u*grad(v)'*grad(ub) )
+  int2d(Th, qft=qfSpecial)( -k1*u*grad(v0)'*grad(ub) )
+  // int2d(Th)( -k1*u*grad(v)'*grad(ub) )
   + int2d(Th)( - u0*ub/dt );
 problem KellerSegelV(v,vb)=
   int2d(Th)( v*vb/dt + k2*grad(v)'*grad(vb) + k3*v*vb )
@@ -161,7 +168,7 @@ real blowUpTolerance=1.e+10;
 for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
   t=t+dt;
   cout << "iter = " << k << "\t (t = " << t << ")" << endl;
-
+  cout << "  number of vertices: " << Th.nv << endl;
   bool buildMatrixSystem = false;
   if(buildMatrixSystem) {
     // 1) Compute u (live organism density) >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -195,7 +202,7 @@ for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
 
   plot(v, value=1, fill=1, dim=3);
   bool adaptMesh=true; if(adaptMesh) {
-    Th = adaptmesh(Th, [u,v], err=0.001, nbvx=100*nx*nx //hmin=0.0001,
+    Th = adaptmesh(Th, v, err=0.001, nbvx=500*nx*nx //hmin=0.0001,
                    );
     plot(Th, wait=1);
   }
