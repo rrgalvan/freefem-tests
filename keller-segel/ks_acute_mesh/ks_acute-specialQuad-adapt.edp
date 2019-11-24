@@ -88,9 +88,23 @@ cout << "Running test " << testName << endl;
 //| Variational problems
 //`---------------------------------------------------------------------
 
-real[int,int] qfData=[ // w_i, x_baric_i, y_baric_i
-		      [1.,  1./4, 1./4] ];
-QF2 qfSpecial(1, qfData);
+// real[int,int] qfDataBaryc=[ // w_i, x_baric_i, y_baric_i
+//                              [1.,  1./3, 1./3] ];
+real[int,int] qfDataNoBaryc=[ // w_i, x_baric_i, y_baric_i
+                             [1.,  1./4, 1./4] ];
+
+QF2 qfSpecial(1, qfDataNoBaryc);
+
+// int barycenterQF = getARGV("-qfbaryc", 0);
+// QF2 qfBaryc  (1, qfDataBaryc);
+// QF2 qfNoBaryc(1, qfDataNoBaryc);
+// QF2 qfSpecial;
+// if(barycenterQF) {
+//   qfSpecial = qfBaryc;
+//  }
+//  else {
+//   qfSpecial = qfNoBaryc;
+//  }
 
 
 // Macros..............................................................>
@@ -99,15 +113,18 @@ macro grad(u) [ dx(u), dy(u) ] // End of Macro
 macro div(u,v) ( dx(u) + dy(v) ) // End of Macro
   ; // for emacs :)
 
-// (Coninuous FEM) Keller Segel problem
 problem KellerSegelU(u,ub)=
-  int2d(Th)( u*ub/dt + k0*grad(u)'*grad(ub) ) +
-  int2d(Th, qft=qfSpecial)( -k1*u*grad(v0)'*grad(ub) )
-  // int2d(Th)( -k1*u*grad(v)'*grad(ub) )
-  + int2d(Th)( - u0*ub/dt );
+  int2d(Th, qft=qf1pTlump)( u*ub ) +
+  int2d(Th)( dt*k0 * grad(u)'*grad(ub) ) +
+  int2d(Th, qft=qfSpecial)( -dt*k1 * u*grad(v0)'*grad(ub) )
+  - int2d(Th, qft=qf1pTlump)( u0*ub )
+  ;
 problem KellerSegelV(v,vb)=
-  int2d(Th)( v*vb/dt + k2*grad(v)'*grad(vb) + k3*v*vb )
-  + int2d(Th)( - v0*vb/dt - k4*u0*vb );
+  int2d(Th, qft=qf1pTlump )( v*vb ) +
+  int2d(Th)( dt*k2 * grad(v)'*grad(vb) + dt*k3 * v*vb )
+  - int2d(Th)( dt*k4 * u*vb )
+  - int2d(Th, qft=qf1pTlump)( v0*vb )
+  ;
 
 
 // Linear form for variational formulation of convection
@@ -202,8 +219,7 @@ for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
 
   plot(v, value=1, fill=1, dim=3);
   bool adaptMesh=true; if(adaptMesh) {
-    Th = adaptmesh(Th, v, err=0.001, nbvx=500*nx*nx //hmin=0.0001,
-                   );
+    Th = adaptmesh(Th, v, err=0.001, nbvx=500*nx*nx);
     plot(Th, wait=1);
   }
   // plot(Th, wait=1, ps="mesh_" + k + ".eps");
