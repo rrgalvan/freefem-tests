@@ -6,6 +6,10 @@
 
 from subprocess import Popen, PIPE, check_output
 import sys
+import re
+import time
+import yaml
+
 
 freefem_interpreter = "FreeFem++"
 freefem_test = "attractive_repulsive.edp"
@@ -13,9 +17,9 @@ freefem_test = "attractive_repulsive.edp"
 def define_default_args():
     test_args = {
         "dt": 0.0001,
-        "nt": 100,
+        "nt": 50,
         "tau": 1,
-        "nx": 100,
+        "nx": 500,
         "ChiAttraction": 1,
         "XiRepulsion": 1,
         "alpha": 1,
@@ -24,8 +28,9 @@ def define_default_args():
         "delta": 1,
         "r": 1,
         "s": 1.7,
-        "C0": 60,
-        "C1": 30
+        "C0": 500,
+        "C1": 200,
+        "infU": 1
     }
     return test_args
 
@@ -41,25 +46,45 @@ def run_test(test_args):
 
     # Run test
     command = [freefem_interpreter, '-nw', '-ne', freefem_test]
-    command.extend(arg_list)
-    ps_freefem = Popen(command, stdout=PIPE, stderr=PIPE)
 
-    # Filter results using grep (via a pipe), looking for lines with string '->'
-    grep_command = "grep -e ->".split(' ')
-    ps_grep = Popen(grep_command, stdin=ps_freefem.stdout,
-                    stdout=PIPE, stderr=PIPE)
-
-    # Filter again, using cut, to obtain second column
-    cut_command = "cut -d > -f 2".split(' ')
-    output = check_output(cut_command, stdin=ps_grep.stdout)
-    output = output.decode(sys.stdout.encoding)
-    print(output)
-
-    # Save output to a yaml file
-    output_yaml_file = "/tmp/out.yaml"
+    output_yaml_file = time.strftime("%Y%m%d-%H%M%S.yaml")
     print(f"Saving to file {output_yaml_file}")
-    with open(output_yaml_file, 'w') as f:
-        f.write(output)
+    command.extend(['-outf', output_yaml_file])
+
+    command.extend(arg_list)
+    ps_freefem = Popen(command)
+
+    # ps_freefem = Popen(command, stdout=PIPE, stderr=PIPE)
+
+    # # Filter results using grep (via a pipe), looking for lines with string '->'
+    # grep_command = "grep -e ->".split(' ')
+    # ps_grep = Popen(grep_command, stdin=ps_freefem.stdout,
+    #                 stdout=PIPE, stderr=PIPE)
+
+    # # Filter again, using cut, to obtain second column
+    # cut_command = "cut -d > -f 2".split(' ')
+    # output = check_output(cut_command, stdin=ps_grep.stdout, stderr=PIPE)
+    # output = output.decode(sys.stdout.encoding)
+    # print(output)
+
+    # Read data as yaml
+    # yaml_dict = yaml.load(output)
+    # k = 'Test data'
+    # data_string = yaml.dump({k: yaml_dict[k]} , default_flow_style=False)
+    # k = 'Test iterations'
+    # iterations_string = yaml.dump({k: yaml_dict[k]} , default_flow_style=False)
+    # k = 'Test summary'
+    # summary_string = yaml.dump({k: yaml_dict[k]} , default_flow_style=False)
+    # with open(output_yaml_file, 'w') as f:
+    #     f.write("---\n")
+    #     f.write(output)
+        # f.write(data_string)
+        # f.write(summary_string)
+        # f.write(iterations_string)
+
+    # with open(output_yaml_file, 'w') as f:
+    #     f.write("---\n")
+    #     f.write(output)
 
 if __name__ == '__main__':
     test_args = define_default_args()

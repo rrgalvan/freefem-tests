@@ -66,29 +66,38 @@ int adaptMesh = getARGV("-adaptmesh", 1);
 //| Print info
 //`---------------------------------------------------------------------
 
-cout << "->---" << endl;
-cout << "->Test data: " << endl;
-cout << "->   dt: " << dt << "   # Time step" << endl;
-cout << "->   nt: " << niter << "   # Number of time iterations" << endl;
-cout << "->   tau: " << tau << "   # 0 : parabolic w" << endl;
-cout << "->   nx: " << nx << "   # Number of bounary subintervals" << endl;
-cout << "->   ChiAttraction: " << ChiAttraction << "   # Attractive chemotaxis coeff." << endl;
-cout << "->   XiRepulsion: " << XiRepulsion << "   # Repulsive chemotaxis coeff." << endl;
-cout << "->   alpha: " << alpha << "" << endl;
-cout << "->   beta: " << beta << "" << endl;
-cout << "->   gamma: " << gamma << "" << endl;
-cout << "->   delta: " << delta << "" << endl;
-cout << "->   r: " << r << "" << endl;
-cout << "->   s: " << s << "" << endl;
-cout << "->   C0: " << C0 << "   # Constant multiplying exp() for u0" << endl;
-cout << "->   C1: " << C1 << "   # Constant in exp() for u0" << endl;
-cout << "->   infU: " << infU << "   # Additive constant for u0" << endl;
+string outputFileName = getARGV("-outf", "output.yaml");
+ofstream fout(outputFileName);
+NewMacro print(code) { /* Print to console and save to output file */
+cout << code;
+fout << code;
+fout.flush;
+}
+EndMacro;
+
+print("---" << endl);
+print("Test data: " << endl);
+print("  dt: " << dt << "   # Time step" << endl);
+print("  nt: " << niter << "   # Number of time iterations" << endl);
+print("  tau: " << tau << "   # 0 : elliptic attractive equation (w)" << endl);
+print("  nx: " << nx << "   # Number of bounary subintervals" << endl);
+print("  ChiAttraction: " << ChiAttraction << "   # Attractive chemotaxis coeff." << endl);
+print("  XiRepulsion: " << XiRepulsion << "   # Repulsive chemotaxis coeff." << endl);
+print("  alpha: " << alpha << "" << endl);
+print("  beta: " << beta << "" << endl);
+print("  gamma: " << gamma << "" << endl);
+print("  delta: " << delta << "" << endl);
+print("  r: " << r << "" << endl);
+print("  s: " << s << "" << endl);
+print("  C0: " << C0 << "   # Constant multiplying exp() for u0" << endl);
+print("  C1: " << C1 << "   # Constant in exp() for u0" << endl);
+print("  infU: " << infU << "  # Additive constant for u0" << endl);
 
 real integralU0=int2d(Th)(u0);
 cout <<"La integral del dato inicial es "<< integralU0 << "(4*pi=" << 4*pi << ")" << endl;
 
 string testName = "KS_" +
-  "dt: " + dt + "_nx: " + nx + "_ChiAttraction=" + ChiAttraction + "_XiRepulsion=" + XiRepulsion;
+"dt: " + dt + "_nx: " + nx + "_ChiAttraction=" + ChiAttraction + "_XiRepulsion=" + XiRepulsion;
 cout << "Running test " << testName << endl;
 
 
@@ -98,77 +107,91 @@ cout << "Running test " << testName << endl;
 
 // Macros..............................................................>
 macro grad(u) [ dx(u), dy(u) ] // End of Macro
-  ; // for emacs :)
+; // for emacs :)
 macro div(u,v) ( dx(u) + dy(v) ) // End of Macro
-  ; // for emacs :)
+; // for emacs :)
 
 // Keller Segel problem / u
 problem KSAttRepU(u,ub)=
-  int2d(Th)( u*ub/dt + grad(u)'*grad(ub)
-	     - ChiAttraction*u*grad(v)'*grad(ub) // Attractive chemotaxis
-	     + XiRepulsion*u*grad(w)'*grad(ub) // Repulsive chemotaxis
-	     )
-  + int2d(Th)( - u0*ub/dt );
+int2d(Th)( u*ub/dt + grad(u)'*grad(ub)
+            - ChiAttraction*u*grad(v)'*grad(ub) // Attractive chemotaxis
+            + XiRepulsion*u*grad(w)'*grad(ub) // Repulsive chemotaxis
+            )
++ int2d(Th)( - u0*ub/dt );
 
 // Keller Segel problem / v
 problem KSAttRepV(v,vb)=
-  int2d(Th)( v*vb/dt + grad(v)'*grad(vb) + beta*v*vb )
-  + int2d(Th)( - alpha*u0s*vb
-	       - v0*vb/dt );
+int2d(Th)( v*vb/dt + grad(v)'*grad(vb) + beta*v*vb )
++ int2d(Th)( - alpha*u0s*vb
+            - v0*vb/dt );
 
 // Keller Segel problem / w
 problem KSAttRepW(w,wb)=
-  int2d(Th)( tau*w*wb/dt + grad(w)'*grad(wb) + delta*w*wb )
-  + int2d(Th)( - gamma*u0r*wb
-	       - tau*w0*wb/dt );
+int2d(Th)( tau*w*wb/dt + grad(w)'*grad(wb) + delta*w*wb )
++ int2d(Th)( - gamma*u0r*wb
+            - tau*w0*wb/dt );
 
 // Time loop ###################################################
+int blowUpIteration = 0;
+bool positivityAchieved = true;
+real uAbsoluteMax = 0;
+real tAbsoluteMax = 0;
+real iterAbsoluteMax = 0;
 
-for (int k=1; k<=niter; k++) {
-  t=t+dt;
-  cout << "->- Time step " << k << ":" << endl;
-  // cout << "->   time_step: " << k << endl;
-  cout << "->   t: " << t << endl;
-  cout << "iter = " << k << "\t (t = " << t << ")" << endl;
+print("Test iterations: " << endl);
+int k;
+for (k=1; k<=niter; k++) {
+t=t+dt;
+print("  - Time iteration " << k << ":" << endl);
+print("      t: " << t << endl);
+// cout << "->   time_step: " << k << endl;
+// cout << "iter = " << k << "\t (t = " << t << ")" << endl;
 
-  u0s = pow(u0, s);
-  KSAttRepV; // Compute v
-  // if(forcePositivity) { v = max(0, v); }
+u0s = pow(u0, s);
+KSAttRepV; // Compute v
+// if(forcePositivity) { v = max(0, v); }
 
-  u0r = pow(u0, r);
-  KSAttRepW; // Compute w
-  // if(forcePositivity) { w = max(0, w); }
+u0r = pow(u0, r);
+KSAttRepW; // Compute w
+// if(forcePositivity) { w = max(0, w); }
 
-  KSAttRepU; // Compute u from u,v
-  // if(forcePositivity) { u = max(0, u); }
+KSAttRepU; // Compute u from u,v
+// if(forcePositivity) { u = max(0, u); }
 
-  // solve Problem(u, ub)=
-  //   int2d(Th)(u*ub)
-  //   - int2d(Th)(1*ub);
+// solve Problem(u, ub)=
+//   int2d(Th)(u*ub)
+//   - int2d(Th)(1*ub);
 
-  real uMax = u[].max; real uMin=u[].min;
-  real vMax = v[].max; real vMin=v[].min;
-  real wMax = w[].max; real wMin=w[].min;
-  real uInt = int2d(Th)(u); real vInt = int2d(Th)(v); real wInt = int2d(Th)(w);
+real uMax = u[].max; real uMin=u[].min;
+if(uAbsoluteMax < uMax) {
+uAbsoluteMax = uMax;
+tAbsoluteMax = t;
+iterAbsoluteMax = k;
+}
+real vMax = v[].max; real vMin=v[].min;
+real wMax = w[].max; real wMin=w[].min;
+real uInt = int2d(Th)(u); real vInt = int2d(Th)(v); real wInt = int2d(Th)(w);
 
-  cout << "->   u: {max: " << uMax << ", min: " << uMin
-       << ", int: " << uInt << "}"
-       << (uMin<0 ? " # u: Positivity broken!!!" : "") << endl;
-  cout << "->   v: {max: " << vMax << ", min: " << vMin
-       << ", int: " << vInt << "}"
-       << (vMin<0 ? " # v: Positivity broken!!!" : "") << endl;
-  cout << "->   w: {max: " << wMax << ", min: " << wMin
-       << ", int: " << wInt << "}"
-       << (wMin<0 ? " # w: Positivity broken!!!" : "") << endl;
-  u0r = pow(u,r);
-  real w0Int = int2d(Th)(w0);
-  real residuo = tau*(int2d(Th)(w)-int2d(Th)(w0))/dt + delta*wInt - gamma*int2d(Th)(u0r);
-  cout << "  int_Th(w0) = " << w0Int << endl;
-  cout << "  inf(v0)*exp(-beta *t) = " << infU*exp(-beta*t)
+print("      u: {max: " << uMax << ", min: " << uMin
+    << ", int: " << uInt << "}"
+    << (uMin<0 ? " # u: Positivity broken!!!" : "") << endl);
+if(uMin < 0) { positivityAchieved = false; }
+print("      v: {max: " << vMax << ", min: " << vMin
+    << ", int: " << vInt << "}"
+    << (vMin<0 ? " # v: Positivity broken!!!" : "") << endl);
+print("      w: {max: " << wMax << ", min: " << wMin
+    << ", int: " << wInt << "}"
+    << (wMin<0 ? " # w: Positivity broken!!!" : "") << endl);
+u0r = pow(u,r);
+real w0Int = int2d(Th)(w0);
+real residuo = tau*(int2d(Th)(w)-int2d(Th)(w0))/dt + delta*wInt - gamma*int2d(Th)(u0r);
+cout << "      int_Th(w0) = " << w0Int << endl;
+cout << "      inf(v0)*exp(-beta *t) = " << infU*exp(-beta*t)
        << ", delta*int(w)-gamma*int(u^r) = " << residuo << endl;
 
   if(uMax>1.e+10) {
     cout << "BLOW UP FOUND!!" << endl;
+    blowUpIteration = k;
     break;
   }
 
@@ -196,4 +219,15 @@ for (int k=1; k<=niter; k++) {
   v0 = v;
   if(tau != 0) { w0 = w; }
 
+ }
+
+print("Test summary: " << endl);
+print("  Number of time iterations: " << min(k, niter) << endl);
+print("  Positivity: " << (positivityAchieved ? "Yes" : "No" ) << endl);
+print("  Absolute max(u): " << uAbsoluteMax << endl);
+print("  At time: " << tAbsoluteMax << endl);
+print("  At iteration: " << iterAbsoluteMax << endl);
+print("  Blow-up: " << (blowUpIteration>0 ? "Yes" : "No") << endl);
+if(blowUpIteration>0) {
+  print("    Blow-up time iteration: " << blowUpIteration << endl);
  }
