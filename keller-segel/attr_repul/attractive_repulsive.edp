@@ -8,7 +8,7 @@ include "getARGV.idp"; // Functions to read arguments from command line
 // real R=1.5;
 real R=2;
 border Gamma(t=0, 2*pi) { x=R*cos(t);  y=R*sin(t); };
-int nx = getARGV("-nx", 100); // Default: nx=50
+int nx = getARGV("-nx", 20); // Default: nx=50
 mesh Th = buildmesh(Gamma(nx));
 
 //,---------------------------------------------------------------------
@@ -61,6 +61,12 @@ v0 = 0.5*u0;
 w0 = 0.5*u0;
 
 int adaptMesh = getARGV("-adaptmesh", 1);
+real errorAdapt = getARGV("-errAdapt", 0.001);
+if(adaptMesh) {
+  Th = adaptmesh(Th, v0, err=errorAdapt, nbvx=100*nx*nx);
+  plot(Th, wait=1);
+ }
+
 
 //,---------------------------------------------------------------------
 //| Print info
@@ -92,6 +98,8 @@ print("  s: " << s << "" << endl);
 print("  C0: " << C0 << "   # Constant multiplying exp() for u0" << endl);
 print("  C1: " << C1 << "   # Constant in exp() for u0" << endl);
 print("  infU: " << infU << "  # Additive constant for u0" << endl);
+print("  adaptMesh: " << (adaptMesh ? "Yes" : "No") << "  # Mesh adapting" << endl);
+print("  errAdapt: " << errorAdapt << "  #  Error in mesh adapting" << endl);
 
 real integralU0=int2d(Th)(u0);
 cout <<"La integral del dato inicial es "<< integralU0 << "(4*pi=" << 4*pi << ")" << endl;
