@@ -51,8 +51,8 @@ real r = getARGV("-r", 1);
 real s = getARGV("-s", 1.7);
 
 real x0=0.0, y0=0.0;
-real C0 = getARGV("-C0", 20);
-real C1 = getARGV("-C0", 30);
+real C0 = getARGV("-C0", 60);
+real C1 = getARGV("-C1", 30);
 real infU = getARGV("-infU", 2);
 
 func initialU = infU + C0*exp( -C1*( (x-x0)^2 + (y-y0)^2 ) );
@@ -60,13 +60,10 @@ u0 = initialU;
 v0 = 0.5*u0;
 w0 = 0.5*u0;
 
+real blowUpTolerance = getARGV("-blowupTol", 1.e+5);
 int adaptMesh = getARGV("-adaptmesh", 1);
-real errorAdapt = getARGV("-errAdapt", 0.001);
-if(adaptMesh) {
-  Th = adaptmesh(Th, v0, err=errorAdapt, nbvx=100*nx*nx);
-  plot(Th, wait=1);
- }
-
+real errAdapt = getARGV("-errAdapt", 0.001);
+bool plotResults = true;
 
 //,---------------------------------------------------------------------
 //| Print info
@@ -99,7 +96,8 @@ print("  C0: " << C0 << "   # Constant multiplying exp() for u0" << endl);
 print("  C1: " << C1 << "   # Constant in exp() for u0" << endl);
 print("  infU: " << infU << "  # Additive constant for u0" << endl);
 print("  adaptMesh: " << (adaptMesh ? "Yes" : "No") << "  # Mesh adapting" << endl);
-print("  errAdapt: " << errorAdapt << "  #  Error in mesh adapting" << endl);
+print("  errAdapt: " << errAdapt << "  #  Error in mesh adapting" << endl);
+print("  blowupTol: " << blowUpTol << "  #  Assume blow up for this tolerance" << endl);
 
 real integralU0=int2d(Th)(u0);
 cout <<"La integral del dato inicial es "<< integralU0 << "(4*pi=" << 4*pi << ")" << endl;
@@ -121,23 +119,27 @@ macro div(u,v) ( dx(u) + dy(v) ) // End of Macro
 
 // Keller Segel problem / u
 problem KSAttRepU(u,ub)=
-int2d(Th)( u*ub/dt + grad(u)'*grad(ub)
-            - ChiAttraction*u*grad(v)'*grad(ub) // Attractive chemotaxis
-            + XiRepulsion*u*grad(w)'*grad(ub) // Repulsive chemotaxis
-            )
-+ int2d(Th)( - u0*ub/dt );
-
+  int2d(Th, qft=qf1pTlump)( u*ub ) +
+  int2d(Th)( dt * grad(u)'*grad(ub)
+        - dt*ChiAttraction * u*grad(v)'*grad(ub) // Attractive chemotaxis
+        + dt*XiRepulsion * u*grad(w)'*grad(ub) // Repulsive chemotaxis
+        )
+  - int2d(Th, qft=qf1pTlump)( u0*ub )
+  ;
 // Keller Segel problem / v
 problem KSAttRepV(v,vb)=
-int2d(Th)( v*vb/dt + grad(v)'*grad(vb) + beta*v*vb )
-+ int2d(Th)( - alpha*u0s*vb
-            - v0*vb/dt );
-
+  int2d(Th, qft=qf1pTlump)( v*vb ) +
+  int2d(Th) ( dt * grad(v)'*grad(vb) + dt*beta * v*vb )
+  - int2d(Th)( dt*alpha * u0s*vb )
+  - int2d(Th, qft=qf1pTlump)( v0*vb )
+  ;
 // Keller Segel problem / w
 problem KSAttRepW(w,wb)=
-int2d(Th)( tau*w*wb/dt + grad(w)'*grad(wb) + delta*w*wb )
-+ int2d(Th)( - gamma*u0r*wb
-            - tau*w0*wb/dt );
+  int2d(Th, qft=qf1pTlump)( tau*w*wb ) +
+  int2d(Th)( dt * grad(w)'*grad(wb) + dt*delta * w*wb )
+  - int2d(Th)( dt*gamma * u0r*wb )
+  - int2d(Th, qft=qf1pTlump)( tau * w0*wb )
+  ;
 
 // Time loop ###################################################
 int blowUpIteration = 0;
@@ -146,64 +148,74 @@ real uAbsoluteMax = 0;
 real tAbsoluteMax = 0;
 real iterAbsoluteMax = 0;
 
-print("Test iterations: " << endl);
+int nAdaptIter = 5; // Maximum number of test adapting iterations
+
+print("Time iterations: " << endl);
 int k;
-for (k=1; k<=niter; k++) {
-t=t+dt;
-print("  - Time iteration " << k << ":" << endl);
-print("      t: " << t << endl);
-// cout << "->   time_step: " << k << endl;
-// cout << "iter = " << k << "\t (t = " << t << ")" << endl;
+for(k=1; k<=niter; k++) {
+  t=t+dt;
+  print("  - Time iteration " << k << ":" << endl);
+  print("      t: " << t << endl);
+  // cout << "->   time_step: " << k << endl;
+  // cout << "iter = " << k << "\t (t = " << t << ")" << endl;
 
-u0s = pow(u0, s);
-KSAttRepV; // Compute v
-// if(forcePositivity) { v = max(0, v); }
+  u0s = pow(u0, s);
+  u0r = pow(u0, r);
 
-u0r = pow(u0, r);
-KSAttRepW; // Compute w
-// if(forcePositivity) { w = max(0, w); }
+  // Mesh adapting loop
+  real uMin=0;
+  for( int iAdapt=0; iAdapt<nAdaptIter && uMin<=0; iAdapt++) {
+    u=u0;
+    v=v0; // v will be used for mesh adapting
+    w=w0;
 
-KSAttRepU; // Compute u from u,v
-// if(forcePositivity) { u = max(0, u); }
+    // Refine mesh
+    if(adaptMesh) {
+      cout << "      Mesh adapting " << iAdapt << endl;
+      Th = adaptmesh(Th, v, err=errAdapt/(2^iAdapt), nbvx=500*nx*nx);
+      if(plotResults) { plot(Th, wait=1); }
+    }
 
-// solve Problem(u, ub)=
-//   int2d(Th)(u*ub)
-//   - int2d(Th)(1*ub);
+    KSAttRepV; // Compute v
+    KSAttRepW; // Compute w
+    KSAttRepU; // Compute u from u,v
 
-real uMax = u[].max; real uMin=u[].min;
-if(uAbsoluteMax < uMax) {
-uAbsoluteMax = uMax;
-tAbsoluteMax = t;
-iterAbsoluteMax = k;
-}
-real vMax = v[].max; real vMin=v[].min;
-real wMax = w[].max; real wMin=w[].min;
-real uInt = int2d(Th)(u); real vInt = int2d(Th)(v); real wInt = int2d(Th)(w);
+    uMin=u[].min;
+  }
+  real uMax = u[].max;
+  if(uAbsoluteMax < uMax) {
+    uAbsoluteMax = uMax;
+    tAbsoluteMax = t;
+    iterAbsoluteMax = k;
+  }
+  real vMax = v[].max; real vMin=v[].min;
+  real wMax = w[].max; real wMin=w[].min;
+  real uInt = int2d(Th)(u); real vInt = int2d(Th)(v); real wInt = int2d(Th)(w);
 
-print("      u: {max: " << uMax << ", min: " << uMin
-    << ", int: " << uInt << "}"
-    << (uMin<0 ? " # u: Positivity broken!!!" : "") << endl);
-if(uMin < 0) { positivityAchieved = false; }
-print("      v: {max: " << vMax << ", min: " << vMin
-    << ", int: " << vInt << "}"
-    << (vMin<0 ? " # v: Positivity broken!!!" : "") << endl);
-print("      w: {max: " << wMax << ", min: " << wMin
-    << ", int: " << wInt << "}"
-    << (wMin<0 ? " # w: Positivity broken!!!" : "") << endl);
-u0r = pow(u,r);
-real w0Int = int2d(Th)(w0);
-real residuo = tau*(int2d(Th)(w)-int2d(Th)(w0))/dt + delta*wInt - gamma*int2d(Th)(u0r);
-cout << "      int_Th(w0) = " << w0Int << endl;
-cout << "      inf(v0)*exp(-beta *t) = " << infU*exp(-beta*t)
+  print("      u: {max: " << uMax << ", min: " << uMin
+        << ", int: " << uInt << "}"
+        << (uMin<0 ? " # u: Positivity broken!!!" : "") << endl);
+  if(uMin < 0) { positivityAchieved = false; }
+  print("      v: {max: " << vMax << ", min: " << vMin
+        << ", int: " << vInt << "}"
+        << (vMin<0 ? " # v: Positivity broken!!!" : "") << endl);
+  print("      w: {max: " << wMax << ", min: " << wMin
+        << ", int: " << wInt << "}"
+        << (wMin<0 ? " # w: Positivity broken!!!" : "") << endl);
+  u0r = pow(u,r);
+  real w0Int = int2d(Th)(w0);
+  real residuo = tau*(int2d(Th)(w)-int2d(Th)(w0))/dt + delta*wInt - gamma*int2d(Th)(u0r);
+  cout << "      int_Th(w0) = " << w0Int << endl;
+  cout << "      inf(v0)*exp(-beta *t) = " << infU*exp(-beta*t)
        << ", delta*int(w)-gamma*int(u^r) = " << residuo << endl;
 
-  if(uMax>1.e+10) {
+  if(uMax>blowUpTolerance) {
     cout << "BLOW UP FOUND!!" << endl;
     blowUpIteration = k;
     break;
   }
 
-  bool plotResults = true; if(plotResults) {
+  if(plotResults) {
     plot(u, cmm="U", value=1, fill=1, dim=3, wait=1);
     plot(v, cmm="V", value=1, fill=1, dim=3, wait=1);
     plot(w, cmm="W", value=1, fill=1, dim=3, wait=1);
@@ -214,12 +226,6 @@ cout << "      inf(v0)*exp(-beta *t) = " << infU*exp(-beta*t)
     string vtkFile="/tmp/" + testName + ".vtk";
     int[int] vtkOrder=[0];
     savevtk(vtkFile, Th, u, v, w, dataname="u v w", order=vtkOrder);
-  }
-
-  // Refine mesh
-  if(adaptMesh) {
-    Th = adaptmesh(Th, v, err=0.001, nbvx=500*nx*nx);
-    plot(Th, wait=1);
   }
 
   u0 = u;  // Prepare next iteration
@@ -236,6 +242,3 @@ print("  Absolute max(u): " << uAbsoluteMax << endl);
 print("  At time: " << tAbsoluteMax << endl);
 print("  At iteration: " << iterAbsoluteMax << endl);
 print("  Blow-up: " << (blowUpIteration>0 ? "Yes" : "No") << endl);
-if(blowUpIteration>0) {
-  print("    Blow-up time iteration: " << blowUpIteration << endl);
- }

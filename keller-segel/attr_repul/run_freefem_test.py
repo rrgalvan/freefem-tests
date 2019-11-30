@@ -16,10 +16,10 @@ freefem_test = "attractive_repulsive.edp"
 
 def define_default_args():
     test_args = {
-        "dt": 0.0001,
+        "dt": 0.001,
         "nt": 50,
         "tau": 1,
-        "nx": 500,
+        "nx": 40,
         "ChiAttraction": 1,
         "XiRepulsion": 1,
         "alpha": 1,
@@ -28,9 +28,10 @@ def define_default_args():
         "delta": 1,
         "r": 1,
         "s": 1.7,
-        "C0": 500,
-        "C1": 200,
-        "infU": 1
+        "C0": 100,
+        "C1": 50,
+        "infU": 1,
+        "errAdapt": 0.001
     }
     return test_args
 
