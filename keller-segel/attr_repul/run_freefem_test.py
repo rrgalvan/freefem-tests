@@ -28,14 +28,14 @@ def define_default_args():
         "delta": 1,
         "r": 1,
         "s": 1.7,
-        "C0": 100,
-        "C1": 50,
+        "C0": 800,
+        "C1": 400,
         "infU": 1,
         "errAdapt": 0.001
     }
     return test_args
 
-def run_test(test_args):
+def run_test(test_args, output_directory="."):
     print(f"Running FreeFem++ test: {freefem_test}")
 
     # Load test specific arguments
@@ -48,8 +48,11 @@ def run_test(test_args):
     # Run test
     command = [freefem_interpreter, '-nw', '-ne', freefem_test]
 
-    output_yaml_file = time.strftime("%Y%m%d-%H%M%S.yaml")
-    print(f"Saving to file {output_yaml_file}")
+    time_string = time.strftime("%Y%m%d-%H%M%S-")
+    time_string += "".join(str(time.clock()).split('.'))
+    output_yaml_file = time_string + ".yaml"
+    output_yaml_file = output_directory + "/" + output_yaml_file
+    print(f"Saving to {output_yaml_file}")
     command.extend(['-outf', output_yaml_file])
 
     command.extend(arg_list)
@@ -87,6 +90,18 @@ def run_test(test_args):
     #     f.write("---\n")
     #     f.write(output)
 
+def run_test_suite_1():
+    """
+    In this test we modify the exponent s
+    """
+    args = define_default_args()
+    for s in range(10,11): # s=0,1,...,9
+        s_value = 1  + 0.1*s
+        print(f"Running test_suite_1, s={s}")
+        args["s"] = s_value
+        run_test(args, output_directory="./test_suite_1/")
+
 if __name__ == '__main__':
     test_args = define_default_args()
-    run_test(test_args)
+    # run_test(test_args)
+    run_test_suite_1()

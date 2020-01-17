@@ -97,7 +97,7 @@ print("  C1: " << C1 << "   # Constant in exp() for u0" << endl);
 print("  infU: " << infU << "  # Additive constant for u0" << endl);
 print("  adaptMesh: " << (adaptMesh ? "Yes" : "No") << "  # Mesh adapting" << endl);
 print("  errAdapt: " << errAdapt << "  #  Error in mesh adapting" << endl);
-print("  blowupTol: " << blowUpTol << "  #  Assume blow up for this tolerance" << endl);
+print("  blowupTol: " << blowUpTolerance << "  #  Assume blow up for this tolerance" << endl);
 
 real integralU0=int2d(Th)(u0);
 cout <<"La integral del dato inicial es "<< integralU0 << "(4*pi=" << 4*pi << ")" << endl;
