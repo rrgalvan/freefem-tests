@@ -88,6 +88,14 @@ cout << "Running test " << testName << endl;
 //| Variational problems
 //`---------------------------------------------------------------------
 
+// Macros..............................................................>
+macro grad(u) [ dx(u), dy(u) ] // End of Macro
+  ; // for emacs :)
+macro div(u,v) ( dx(u) + dy(v) ) // End of Macro
+  ; // for emacs :)
+
+
+// Quadrature formulae..................................................>
 // real[int,int] qfDataBaryc=[ // w_i, x_baric_i, y_baric_i
 //                              [1.,  1./3, 1./3] ];
 real[int,int] qfDataNoBaryc=[ // w_i, x_baric_i, y_baric_i
@@ -106,17 +114,13 @@ QF2 qfSpecial(1, qfDataNoBaryc);
 //   qfSpecial = qfNoBaryc;
 //  }
 
-
-// Macros..............................................................>
-macro grad(u) [ dx(u), dy(u) ] // End of Macro
-  ; // for emacs :)
-macro div(u,v) ( dx(u) + dy(v) ) // End of Macro
-  ; // for emacs :)
+// macro specialQuadOptions qft=qfSpecial // EOM
+macro specialQuadOptions qforder=2 // EOM
 
 problem KellerSegelU(u,ub)=
   int2d(Th, qft=qf1pTlump)( u*ub ) +
   int2d(Th)( dt*k0 * grad(u)'*grad(ub) ) +
-  int2d(Th, qft=qfSpecial)( -dt*k1 * u*grad(v0)'*grad(ub) )
+  int2d(Th, specialQuadOptions)( -dt*k1 * u*grad(v0)'*grad(ub) )
   - int2d(Th, qft=qf1pTlump)( u0*ub )
   ;
 problem KellerSegelV(v,vb)=
@@ -145,7 +149,7 @@ varf varfDiffusion(u,ub) =
 // on an specific point, whose barycentric coords are (1/4,1/4,1/2)
 
 varf varfChemotaxisExplicitV(u,ub)=
-  int2d(Th, qft=qfSpecial)( -u*grad(v0)'*grad(ub) );
+  int2d(Th, specialQuadOptions)( -u*grad(v0)'*grad(ub) );
 
 
 NewMacro BuildSystemU
