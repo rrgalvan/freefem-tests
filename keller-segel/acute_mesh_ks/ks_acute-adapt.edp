@@ -114,6 +114,7 @@ QF2 qfSpecial(1, qfDataNoBaryc);
 //   qfSpecial = qfNoBaryc;
 //  }
 
+// Macro to select if special quadrature formula is selected
 // macro specialQuadOptions qft=qfSpecial // EOM
 macro specialQuadOptions qforder=2 // EOM
 
@@ -222,7 +223,8 @@ for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
   cout << "  int_Th(u) = " << uInt << "  int_Th(v) = " << vInt << endl;
 
   plot(v, value=1, fill=1, dim=3);
-  bool adaptMesh=true; if(adaptMesh) {
+  bool adaptMesh=getARGV("-adaptMesh", 1);
+  if(adaptMesh) {
     Th = adaptmesh(Th, v, err=0.001, nbvx=500*nx*nx);
     plot(Th, wait=1);
   }
