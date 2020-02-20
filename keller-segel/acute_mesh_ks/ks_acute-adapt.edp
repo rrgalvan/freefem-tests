@@ -43,7 +43,7 @@ real k2 = getARGV("-k2", 1);
 real k3 = getARGV("-k3", 1);
 real k4 = getARGV("-k4", 1);
 real cteU0 = getARGV("-cu0", 1000);
-real cteV0 = getARGV("-cv0", 500);
+real cteV0 = getARGV("-cv0",  500);
 func uInitCond = cteU0*exp(-0.1*cteU0*(x^2+y^2));
 func vInitCond = cteV0*exp(-0.1*cteV0*(x^2+y^2));
 
@@ -96,12 +96,12 @@ macro div(u,v) ( dx(u) + dy(v) ) // End of Macro
 
 
 // Quadrature formulae..................................................>
-// real[int,int] qfDataBaryc=[ // w_i, x_baric_i, y_baric_i
-//                              [1.,  1./3, 1./3] ];
+real[int,int] qfDataBaryc=[ // w_i, x_baric_i, y_baric_i
+                             [1.,  1./3, 1./3] ];
 real[int,int] qfDataNoBaryc=[ // w_i, x_baric_i, y_baric_i
                              [1.,  1./4, 1./4] ];
 
-QF2 qfSpecial(1, qfDataNoBaryc);
+QF2 qfSpecial(1, qfDataBaryc);
 
 // int barycenterQF = getARGV("-qfbaryc", 0);
 // QF2 qfBaryc  (1, qfDataBaryc);
@@ -115,8 +115,8 @@ QF2 qfSpecial(1, qfDataNoBaryc);
 //  }
 
 // Macro to select if special quadrature formula is selected
-// macro specialQuadOptions qft=qfSpecial // EOM
-macro specialQuadOptions qforder=2 // EOM
+macro specialQuadOptions qft=qfSpecial // EOM
+// macro specialQuadOptions qforder=2 // EOM
 
 problem KellerSegelU(u,ub)=
   int2d(Th, qft=qf1pTlump)( u*ub ) +
@@ -125,59 +125,14 @@ problem KellerSegelU(u,ub)=
   - int2d(Th, qft=qf1pTlump)( u0*ub )
   ;
 problem KellerSegelV(v,vb)=
-  int2d(Th, qft=qf1pTlump )( v*vb ) +
-  int2d(Th)( dt*k2 * grad(v)'*grad(vb) + dt*k3 * v*vb )
-  - int2d(Th)( dt*k4 * u*vb )
-  - int2d(Th, qft=qf1pTlump)( v0*vb )
+  int2d(Th, qft=qf1pTlump ) ( v*vb ) +
+  int2d(Th) ( dt*k2 * grad(v)'*grad(vb) )
+  + int2d(Th, qft=qf1pTlump) ( dt*k3 * v*vb )
+  - int2d(Th, qft=qf1pTlump) ( dt*k4 * u*vb )
+  - int2d(Th, qft=qf1pTlump) ( v0*vb )
   ;
 
 
-// Linear form for variational formulation of convection
-// varf varfConvectThetaSchemeDG(unused,ub) =
-//   int2d(Th)(u0*ub/dt)
-//   + aUPW( -(1-theta), b, u0, ub ); // - aUPW in RHS
-
-// Bilinear form for mass matrix
-varf varfMassLump(u,ub) =
-  int2d(Th, qft=qf1pTlump) (u*ub);
-
-// Bilinear form for diffusion stiffness matrix
-varf varfDiffusion(u,ub) =
-  int2d(Th) ( grad(u)'*grad(ub) );
-
-// Bilinear form for chemotaxis
-// We use a special quadrature formula, so that u is evaluated
-// on an specific point, whose barycentric coords are (1/4,1/4,1/2)
-
-varf varfChemotaxisExplicitV(u,ub)=
-  int2d(Th, specialQuadOptions)( -u*grad(v0)'*grad(ub) );
-
-
-NewMacro BuildSystemU
-//----------------------------------------------------------------------
-// 1.a Define matrix
-matrix Mu = varfMassLump(Uh, Uh);  // Mass matrix
-matrix Ku = varfDiffusion(Uh,Uh);  // Diffusion matrix
-matrix Cu = varfChemotaxisExplicitV(Uh,Uh);
-matrix Au = Mu + dt*k0*Ku + dt*k1*Cu;
-set(Au, solver=UMFPACK);
-
-// 1.b Define RHS
-real[int] Fu = Mu*u0[];
-//----------------------------------------------------------------------
-EndMacro
-
-NewMacro BuildSystemV
-//----------------------------------------------------------------------
-// 2.a Define matrix
-matrix Av = (1 + dt*k3)*Mu + dt*k2*Ku; // Assuming Uh == Vh
-set(Av, solver=UMFPACK);
-
-// 2.b Define RHS
-real[int] vAux= dt*k4*u[] + v0[]; // Assuming dim(Uh) == dim(Vh)
-real[int] Fv = Mu*vAux; // Assuming Uh == Vh
-//----------------------------------------------------------------------
-EndMacro
 
 //,---------------------------------------------------------------------
 //| Time loop
@@ -191,25 +146,22 @@ for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
   t=t+dt;
   cout << "iter = " << k << "\t (t = " << t << ")" << endl;
   cout << "  number of vertices: " << Th.nv << endl;
-  bool buildMatrixSystem = false;
-  if(buildMatrixSystem) {
-    // 1) Compute u (live organism density) >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    BuildSystemU
-    u[] = Au^-1*Fu;
 
-    // 2) Compute v (chemoattractant density) >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    BuildSystemV
-    v[] = Av^-1*Fv;
-
+  // Mesh adaptivity ····························································
+  bool adaptMesh=getARGV("-adaptMesh", 0);
+  if(adaptMesh) {
+    Th = adaptmesh(Th, [u0, v0] , err=0.01, nbvx=500*nx*nx);
+    plot(Th, wait=1);
+    u = u;  // Seen in https://doc.freefem.org/tutorials/flowWithShocks.html
+    v = v;  // Project in new mesh
   }
+  // plot(Th, wait=1, ps="mesh_" + k + ".eps");
 
-  else {
-    // Solve system for u ······················································
-    KellerSegelU;   // Compute u
+  // Solve system for u ······················································
+  KellerSegelU;   // Compute u
 
-    // Solve system for v ······················································
-    KellerSegelV;   // Compute v
-  }
+  // Solve system for v ······················································
+  KellerSegelV;   // Compute v
 
   // Post-process ····························································
 
@@ -219,16 +171,15 @@ for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
        << (uMin<0 ? " ...---... Positivity broken!!!" : "") << endl;
   cout << "  max(v) = " << vMax << "  min(v) = " << vMin
        << (vMin<0 ? " ...---... (V) Positivity broken!!!" : "") << endl;
-  real uInt = int2d(Th)(u); real vInt = int2d(Th)(v);
-  cout << "  int_Th(u) = " << uInt << "  int_Th(v) = " << vInt << endl;
+
+  real uInt = int2d(Th)(u);
+  real vInt = int2d(Th)(v);
+  cout << "  int_Th(u) = " << uInt
+       << "  int_Th(v) = " << vInt
+       << endl;
 
   plot(v, value=1, fill=1, dim=3);
-  bool adaptMesh=getARGV("-adaptMesh", 1);
-  if(adaptMesh) {
-    Th = adaptmesh(Th, v, err=0.001, nbvx=500*nx*nx);
-    plot(Th, wait=1);
-  }
-  // plot(Th, wait=1, ps="mesh_" + k + ".eps");
+
 
   bool plotToVTK=true; if(plotToVTK) {
     string vtkFile="/tmp/" + testName + "_" + k + ".vtk";
