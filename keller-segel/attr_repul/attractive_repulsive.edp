@@ -83,7 +83,7 @@ print("Test data: " << endl);
 print("  dt: " << dt << "   # Time step" << endl);
 print("  nt: " << niter << "   # Number of time iterations" << endl);
 print("  tau: " << tau << "   # 0 : elliptic attractive equation (w)" << endl);
-print("  nx: " << nx << "   # Number of bounary subintervals" << endl);
+print("  nx: " << nx << "   # Number of boundary subintervals" << endl);
 print("  ChiAttraction: " << ChiAttraction << "   # Attractive chemotaxis coeff." << endl);
 print("  XiRepulsion: " << XiRepulsion << "   # Repulsive chemotaxis coeff." << endl);
 print("  alpha: " << alpha << "" << endl);
