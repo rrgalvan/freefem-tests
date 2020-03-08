@@ -13,7 +13,7 @@ include "getARGV.idp"; // Functions to read arguments from command line
 //,---------------------------------------------------------------------
 //| Keller-Segel data
 //`---------------------------------------------------------------------
-int nx = getARGV("-nx", 100);
+int nx = getARGV("-nx", 50);
 int acuteMesh = getARGV("-acute", 1);
 mesh Th;
 if(acuteMesh) {
@@ -44,8 +44,8 @@ real k3 = getARGV("-k3", 1);
 real k4 = getARGV("-k4", 1);
 real cteU0 = getARGV("-cu0", 1000);
 real cteV0 = getARGV("-cv0",  500);
-func uInitCond = cteU0*exp(-0.1*cteU0*(x^2+y^2));
-func vInitCond = cteV0*exp(-0.1*cteV0*(x^2+y^2));
+func uInitCond = cteU0*exp(-0.1*cteU0*(x^2+(y)^2));
+func vInitCond = cteV0*exp(-0.1*cteV0*(x^2+(y)^2));
 
 // Finite elements
 fespace Uh(Th, P1);
@@ -63,6 +63,9 @@ real dt = getARGV("-dt", 1.e-5);
 
 u0 = uInitCond;
 v0 = vInitCond;
+
+plot(u0, value=1, fill=1, dim=3, cmm="U0", wait=1, ColorScheme=1);
+plot(v0, value=1, fill=1, dim=3, cmm="V0", wait=1, ColorScheme=2);
 
 cout << "M'aximos y m'inimos de los datos iniciales:" << endl;
 {
@@ -158,8 +161,10 @@ for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
   // plot(Th, wait=1, ps="mesh_" + k + ".eps");
 
   // Solve system for u ······················································
+  cout << "  computing u... " << endl;
   KellerSegelU;   // Compute u
 
+  cout << "  computing v... " << endl;
   // Solve system for v ······················································
   KellerSegelV;   // Compute v
 
@@ -178,10 +183,11 @@ for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
        << "  int_Th(v) = " << vInt
        << endl;
 
-  plot(v, value=1, fill=1, dim=3);
+  plot(u, value=1, fill=1, dim=3, cmm="U", wait=1, ColorScheme=1);
+  plot(v, value=1, fill=1, dim=3, cmm="V", wait=1, ColorScheme=2);
 
 
-  bool plotToVTK=true; if(plotToVTK) {
+  bool plotToVTK=false; if(plotToVTK) {
     string vtkFile="./" + testName + "_" + k + ".vtk";
     int[int] vtkOrder=[0];
     cout << "Saving " << vtkFile << endl;
