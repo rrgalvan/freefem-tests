@@ -45,7 +45,7 @@ real k4 = getARGV("-k4", 1);
 real cteU0 = getARGV("-cu0", 1000);
 real cteV0 = getARGV("-cv0",  500);
 func uInitCond = cteU0*exp(-0.1*cteU0*(x^2+(y)^2));
-func vInitCond = cteV0*exp(-0.1*cteV0*(x^2+(y)^2));
+func vInitCond = cteV0*exp(-0.1*cteV0*(x^2+(y-0.5)^2));
 
 // Finite elements
 fespace Uh(Th, P1);
@@ -64,8 +64,8 @@ real dt = getARGV("-dt", 1.e-5);
 u0 = uInitCond;
 v0 = vInitCond;
 
-plot(u0, value=1, fill=1, dim=3, cmm="U0", wait=1, ColorScheme=1);
-plot(v0, value=1, fill=1, dim=3, cmm="V0", wait=1, ColorScheme=2);
+plot(u0, value=1, fill=1, dim=2, cmm="U0", wait=1, ColorScheme=1);
+plot(v0, value=1, fill=1, dim=2, cmm="V0", wait=1, ColorScheme=2);
 
 cout << "M'aximos y m'inimos de los datos iniciales:" << endl;
 {
@@ -97,7 +97,6 @@ macro grad(u) [ dx(u), dy(u) ] // End of Macro
 macro div(u,v) ( dx(u) + dy(v) ) // End of Macro
   ; // for emacs :)
 
-
 // Quadrature formulae..................................................>
 real[int,int] qfDataBaryc=[ // w_i, x_baric_i, y_baric_i
                              [1.,  1./3, 1./3] ];
@@ -124,7 +123,7 @@ macro specialQuadOptions qft=qfSpecial // EOM
 problem KellerSegelU(u,ub)=
   int2d(Th, qft=qf1pTlump)( u*ub ) +
   int2d(Th)( dt*k0 * grad(u)'*grad(ub) ) +
-  int2d(Th, specialQuadOptions)( -dt*k1 * u*grad(v0)'*grad(ub) )
+  int2d(Th)( -dt*k1 * u*grad(v0)'*grad(ub) )
   - int2d(Th, qft=qf1pTlump)( u0*ub )
   ;
 problem KellerSegelV(v,vb)=
@@ -135,12 +134,9 @@ problem KellerSegelV(v,vb)=
   - int2d(Th, qft=qf1pTlump) ( v0*vb )
   ;
 
-
-
 //,---------------------------------------------------------------------
 //| Time loop
 //`---------------------------------------------------------------------
-
 
 real uMax = 0, vMax=0;
 real blowUpTolerance=1.e+10;
@@ -183,8 +179,8 @@ for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
        << "  int_Th(v) = " << vInt
        << endl;
 
-  plot(u, value=1, fill=1, dim=3, cmm="U", wait=1, ColorScheme=1);
-  plot(v, value=1, fill=1, dim=3, cmm="V", wait=1, ColorScheme=2);
+  plot(u, value=1, fill=1, dim=2, cmm="U", wait=1, ColorScheme=1);
+  plot(v, value=1, fill=1, dim=2, cmm="V", wait=1, ColorScheme=2);
 
 
   bool plotToVTK=false; if(plotToVTK) {
