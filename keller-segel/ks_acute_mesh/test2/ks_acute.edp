@@ -44,8 +44,8 @@ real k3 = getARGV("-k3", 1);
 real k4 = getARGV("-k4", 1);
 real cteU0 = getARGV("-cu0", 1000);
 real cteV0 = getARGV("-cv0",  500);
-func uInitCond = cteU0*exp(-0.1*cteU0*(x^2+(y)^2));
-func vInitCond = cteV0*exp(-0.1*cteV0*(x^2+(y-0.5)^2));
+func uInitCond = cteU0*exp(-0.1*cteU0*(x^2+y^2));
+func vInitCond = cteV0*exp(-0.1*cteV0*(x^2+y^2));
 
 // Finite elements
 fespace Uh(Th, P1);
