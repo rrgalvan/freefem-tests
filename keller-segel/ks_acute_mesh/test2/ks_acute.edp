@@ -17,14 +17,14 @@ int nx = getARGV("-nx", 50);
 int acuteMesh = getARGV("-acute", 1);
 mesh Th;
 if(acuteMesh) {
-string meshDir = "meshes/";
-string meshFile= meshDir + "acute_mesh_" + nx + "x" + nx + "_[-0.5,0.5]^2.msh";
-cout << "Reading mesh from " << meshFile << endl;
-Th=readmesh(meshFile);
-}
-else {
-Th=square(nx, nx, [x-0.5, y-0.5]);
-}
+  string meshDir = "meshes/";
+  string meshFile= meshDir + "acute_mesh_" + nx + "x" + nx + "_[-0.5,0.5]^2.msh";
+  cout << "Reading mesh from " << meshFile << endl;
+  Th=readmesh(meshFile);
+ }
+ else {
+   Th=square(nx, nx, [x-0.5, y-0.5]);
+ }
 
 //>> Paremeters from G. Viglialoro et al....
 // int nx=20
@@ -65,18 +65,15 @@ real Tmax = niter*dt;
 u0 = uInitCond;
 v0 = vInitCond;
 
-plot(u0, value=1, fill=1, dim=2, cmm="U0", wait=1, ColorScheme=1);
-plot(v0, value=1, fill=1, dim=2, cmm="V0", wait=1, ColorScheme=2);
-
 cout << "M'aximos y m'inimos de los datos iniciales:" << endl;
 {
-u=u0; v=v0;
-real uMax = u[].max; real uMin=u[].min;
-real vMax = v[].max; real vMin=v[].min;
-cout << "  max(u) = " << uMax << "  min(u) = " << uMin
-<< (uMin<0 ? " ...---... Positivity broken!!!" : "") << endl;
-cout << "  max(v) = " << vMax << "  min(v) = " << vMin
-<< (vMin<0 ? " ...---... (V) Positivity broken!!!" : "") << endl;
+  u=u0; v=v0;
+  real uMax = u[].max; real uMin=u[].min;
+  real vMax = v[].max; real vMin=v[].min;
+  cout << "  max(u) = " << uMax << "  min(u) = " << uMin
+       << (uMin<0 ? " ...---... Positivity broken!!!" : "") << endl;
+  cout << "  max(v) = " << vMax << "  min(v) = " << vMin
+       << (vMin<0 ? " ...---... (V) Positivity broken!!!" : "") << endl;
 }
 real integralU0=int2d(Th)(u0);
 cout <<"La integral del dato inicial es "<< integralU0 <<
@@ -94,7 +91,7 @@ cout << "Running test " << testName << endl;
 
 // Macros..............................................................>
 macro grad(u) [ dx(u), dy(u) ] // End of Macro
-; // for emacs :)
+  ; // for emacs :)
 macro div(u,v) ( dx(u) + dy(v) ) // End of Macro
   ; // for emacs :)
 
@@ -103,8 +100,8 @@ macro intLump(expr) int2d(Th, qft=qf1pTlump) (expr) // EOM
   ;
 
 cout << "### 0" << endl;
-real u0NormH = intLump(u0*u0);
-real v0NormH = intLump(v0*v0);
+real u0NormHsqr = intLump(u0*u0); // ||u0||_h^2
+real v0NormHsqr = intLump(v0*v0); // ||v0||_h^2
 cout << "### 0.5" << endl;
 
 // Compute discrete laplacian of v0
@@ -114,16 +111,16 @@ solve vLap(v0Laplacian, vb, solver=sparsesolver) =
 
 cout << "### 1" << endl;
 
-real gradv0Norm2 = int2d(Th)( grad(v0)'*grad(v0) );
-cout << " ||grad(v0)||_L2 ^2 = " << gradv0Norm2 << endl;
-real u0v0ProdH = intLump(u0*v0);
+real gradv0Norm2sqr = int2d(Th)( grad(v0)'*grad(v0) ); // || grad(v0) ||_L2^2
+cout << " ||grad(v0)||_L2 ^2 = " << gradv0Norm2sqr << endl;
+real u0v0ProdH = intLump(u0*v0); // (u0,v0)_h
 cout << " (u0,v0)_h= " << u0v0ProdH << endl;
-real logu0u0ProdH = intLump(log(u0)*u0);
+real logu0u0ProdH = intLump(log(u0)*u0); // (log(u0), u0)_h
 cout << " (log(u0),u0)_h= " << u0v0ProdH << endl;
-real E0 = 0.5*v0NormH + 0.5*gradv0Norm2 - u0v0ProdH + logu0u0ProdH;
+real E0 = 0.5*v0NormHsqr + 0.5*gradv0Norm2sqr - u0v0ProdH + logu0u0ProdH;
 cout << "E0 = " << E0 << endl;
 
-real E1 = u0NormH + int2d(Th)( v0Laplacian*v0Laplacian );
+real E1 = u0NormHsqr + int2d(Th)( v0Laplacian*v0Laplacian );
 cout << "E1 = " << E1 << endl;
 
 real eps=0.5, delta=0.5, e=2.718281828459045235360287;
@@ -150,6 +147,18 @@ real Fu0v0 = Fexp*  (E0 + CteOmega*Tmax*B1^3 + CteOmega*Tmax*u0NormL1 );
 cout << "Const. F(u0,v0) = " << Fu0v0 << endl;
 cout << "CFL Theorem 3.1: C*k/h^2* F(u0,v0)* = " << CteOmega*dt/(nx*nx) * Fu0v0 << endl;
 
+// -----
+// Plot
+
+plot(u0, value=1, fill=1, dim=2, cmm="U0", wait=1, ColorScheme=1);
+plot(v0, value=1, fill=1, dim=2, cmm="V0", wait=1, ColorScheme=2);
+
+bool plotToVTK=true; if(plotToVTK) {
+  string vtkFile="./" + testName + "_0.vtk";
+  int[int] vtkOrder=[1, 1, 1];
+  cout << "Saving " << vtkFile << endl;
+  savevtk(vtkFile, Th, u0, v0, v0Laplacian, dataname="u v v0Lap", order=vtkOrder);
+ }
 
 //,---------------------------------------------------------------------
 //| Variational problems
@@ -157,9 +166,9 @@ cout << "CFL Theorem 3.1: C*k/h^2* F(u0,v0)* = " << CteOmega*dt/(nx*nx) * Fu0v0 
 
 // Quadrature formulae..................................................>
 real[int,int] qfDataBaryc=[ // w_i, x_baric_i, y_baric_i
-		     [1.,  1./3, 1./3] ];
+                             [1.,  1./3, 1./3] ];
 real[int,int] qfDataNoBaryc=[ // w_i, x_baric_i, y_baric_i
-		     [1.,  1./4, 1./4] ];
+                             [1.,  1./4, 1./4] ];
 
 QF2 qfSpecial(1, qfDataBaryc);
 
@@ -239,13 +248,13 @@ for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
        << "  int_Th(v) = " << vInt
        << endl;
 
-  plot(u, value=1, fill=1, dim=2, cmm="U", wait=0, ColorScheme=1);
-  plot(v, value=1, fill=1, dim=2, cmm="V", wait=0, ColorScheme=2);
+  plot(u, value=1, fill=1, dim=2, cmm="U", wait=1, ColorScheme=1);
+  plot(v, value=1, fill=1, dim=2, cmm="V", wait=1, ColorScheme=2);
 
 
   bool plotToVTK=true; if(plotToVTK) {
     string vtkFile="./" + testName + "_" + k + ".vtk";
-    int[int] vtkOrder=[0];
+    int[int] vtkOrder=[1, 1];
     cout << "Saving " << vtkFile << endl;
     savevtk(vtkFile, Th, u, v, dataname="u v", order=vtkOrder);
   }
