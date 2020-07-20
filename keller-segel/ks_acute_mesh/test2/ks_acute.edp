@@ -140,7 +140,6 @@ real B2 = E0 + B0 + B1;
 cout << "B2 = " << B1 << endl;
 
 real Fexp = exp( B2 + sqrt(Tmax*B2) );
-Fexp = exp(100.0);
 cout << "Fexp = " << Fexp << endl;
 real Fu0v0 = Fexp*  (E0 + CteOmega*Tmax*B1^3 + CteOmega*Tmax*u0NormL1 );
 
@@ -153,7 +152,8 @@ cout << "CFL Theorem 3.1: C*k/h^2* F(u0,v0)* = " << CteOmega*dt/(nx*nx) * Fu0v0 
 plot(u0, value=1, fill=1, dim=2, cmm="U0", wait=1, ColorScheme=1);
 plot(v0, value=1, fill=1, dim=2, cmm="V0", wait=1, ColorScheme=2);
 
-bool plotToVTK=true; if(plotToVTK) {
+bool plotToVTK = (getARGV("-vtk", 1) != 0);
+if(plotToVTK) {
   string vtkFile="./" + testName + "_0.vtk";
   int[int] vtkOrder=[1, 1, 1];
   cout << "Saving " << vtkFile << endl;
@@ -251,8 +251,7 @@ for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
   plot(u, value=1, fill=1, dim=2, cmm="U", wait=1, ColorScheme=1);
   plot(v, value=1, fill=1, dim=2, cmm="V", wait=1, ColorScheme=2);
 
-
-  bool plotToVTK=true; if(plotToVTK) {
+  if(plotToVTK) {
     string vtkFile="./" + testName + "_" + k + ".vtk";
     int[int] vtkOrder=[1, 1];
     cout << "Saving " << vtkFile << endl;
