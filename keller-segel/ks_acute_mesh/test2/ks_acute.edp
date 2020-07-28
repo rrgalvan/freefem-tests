@@ -33,9 +33,8 @@ if(acuteMesh) {
 // u0 = 1.15*exp(-x^2-y^2)*(4-x^2)^2*(4-y^2)^2;
 // v0 = 0.55*exp(-x^2-y^2)*(4-x^2)^2*(4-y^2)^2;
 
-//>> Parameters from Y. Epshteyn & A. Kurganov...
-//>> Blow-up expected at t = 1.21·10^{−4}
-// int nx = 50; // Also nx=101
+//>> Parameters from  A. Chertok & A. Kurganov...
+//>> Blow-up conjetured at $t\in [4.4e-5, 1.e-4]$ 
 // mesh Th = square(nx, nx, [ x-0.5, y-0.5 ]);
 real k0 = getARGV("-k0", 1);
 real k1 = getARGV("-k1", 1);
@@ -47,6 +46,12 @@ real cteV0 = getARGV("-cv0",  500);
 cout << "cteU0 = " << cteU0 << ", cteV0=" << cteV0 << endl;
 func uInitCond = cteU0*exp(-0.1*cteU0*(x^2+y^2));
 func vInitCond = cteV0*exp(-0.1*cteV0*(x^2+y^2));
+
+//>> Parameters from Y. Epshteyn & A. Kurganov...
+//>> Blow-up expected at t = 1.21·10^{−4}
+//real cteU0 = getARGV("-cu0", 1200);
+//real cteV0 = getARGV("-cv0",  600);
+
 
 // Finite elements
 fespace Uh(Th, P1);
