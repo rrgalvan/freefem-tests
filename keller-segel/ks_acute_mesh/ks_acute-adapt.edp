@@ -181,7 +181,8 @@ for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
   plot(v, value=1, fill=1, dim=3);
 
 
-  bool plotToVTK=true; if(plotToVTK) {
+  int vtkIterModule=2; // Save to vtk each n iterations
+  bool plotToVTK=true; if(plotToVTK and (k % vtkIterModule == 0)) {
     string vtkFile="./" + testName + "_" + k + ".vtk";
     int[int] vtkOrder=[0];
     cout << "Saving " << vtkFile << endl;

@@ -10,7 +10,7 @@ OUTNAME="acute=$(ACUTE)_nx=$(NX)_dt=$(DT)_nt=$(NT)_cu0=$(CU0)_cv0=$(CV0)"
 OUTFILE="$(OUTNAME).out"
 OUTDIR="tests/$(OUTNAME)"
 
-
+FREEFEM=FreeFem++-nw
 
 all: help
 
@@ -23,7 +23,7 @@ help:
 
 test:
 	@echo "Running FreeFem++ test, output to $(OUTFILE)"
-	FreeFem++-nw ks_acute.edp -acute $(ACUTE) -nx $(NX) -dt $(DT) -nt $(NT) -cu0 $(CU0) -cv0 $(CV0) -vtk $(VTK) > $(OUTFILE)
+	$(FREEFEM) ks_acute.edp -acute $(ACUTE) -nx $(NX) -dt $(DT) -nt $(NT) -cu0 $(CU0) -cv0 $(CV0) -vtk $(VTK) > $(OUTFILE)
 
 
 move:
