@@ -27,6 +27,7 @@ if(acuteMesh) {
  }
 
 // Mesh size
+fespace Ph(Th, P0);
 Ph hTri = hTriangle;
 real h = hTri[].max;
 cout << "Size of mesh = " << h << endl;
