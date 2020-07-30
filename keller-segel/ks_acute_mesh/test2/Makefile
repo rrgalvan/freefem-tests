@@ -22,8 +22,8 @@ help:
 		make test NX=200"
 
 test:
-	@echo "Running FreeFem++ test, output to $(OUTFILE)"
-	$(FREEFEM) ks_acute.edp -acute $(ACUTE) -nx $(NX) -dt $(DT) -nt $(NT) -cu0 $(CU0) -cv0 $(CV0) -vtk $(VTK) > $(OUTFILE)
+	@echo "Running FreeFem++ test, saving output to $(OUTFILE)"
+	$(FREEFEM) ks_acute.edp -acute $(ACUTE) -nx $(NX) -dt $(DT) -nt $(NT) -cu0 $(CU0) -cv0 $(CV0) -vtk $(VTK) > $(OUTFILE) &
 
 
 move:
