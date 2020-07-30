@@ -34,7 +34,7 @@ if(acuteMesh) {
 // v0 = 0.55*exp(-x^2-y^2)*(4-x^2)^2*(4-y^2)^2;
 
 //>> Parameters from  A. Chertok & A. Kurganov...
-//>> Blow-up conjetured at $t\in [4.4e-5, 1.e-4]$ 
+//>> Blow-up conjetured at $t\in [4.4e-5, 1.e-4]$
 // mesh Th = square(nx, nx, [ x-0.5, y-0.5 ]);
 real k0 = getARGV("-k0", 1);
 real k1 = getARGV("-k1", 1);
@@ -105,17 +105,15 @@ macro div(u,v) ( dx(u) + dy(v) ) // End of Macro
 macro intLump(expr) int2d(Th, qft=qf1pTlump) (expr) // EOM
   ;
 
-cout << "### 0" << endl;
 real u0NormHsqr = intLump(u0*u0); // ||u0||_h^2
 real v0NormHsqr = intLump(v0*v0); // ||v0||_h^2
-cout << "### 0.5" << endl;
 
 // Compute discrete laplacian of v0
 Vh v0Laplacian;
 solve vLap(v0Laplacian, vb, solver=sparsesolver) =
   intLump( -v0Laplacian*vb ) - int2d(Th)( grad(v0)'*grad(vb) );
 
-cout << "### 1" << endl;
+cout << "###" << endl;
 
 real gradv0Norm2sqr = int2d(Th)( grad(v0)'*grad(v0) ); // || grad(v0) ||_L2^2
 cout << " ||grad(v0)||_L2 ^2 = " << gradv0Norm2sqr << endl;
@@ -146,7 +144,7 @@ real B2 = E0 + B0 + B1;
 cout << "B2 = " << B1 << endl;
 
 real Fexp = exp( B2 + sqrt(Tmax*B2) );
-cout << "Fexp = " << Fexp << endl;
+cout << "Fexp = exp( B2 + sqrt(Tmax*B2) ) " << Fexp << endl;
 real Fu0v0 = Fexp*  (E0 + CteOmega*Tmax*B1^3 + CteOmega*Tmax*u0NormL1 );
 
 cout << "Const. F(u0,v0) = " << Fu0v0 << endl;
@@ -259,7 +257,7 @@ for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
   plot(v, value=1, fill=1, dim=2, cmm="V", wait=1, ColorScheme=2);
 
 //  int vtkModule = getARGV("-vtk", 1); // Save to vtk each n iterations
-  if(plotToVTK) { 
+  if(plotToVTK) {
     if(k % plotToVTK == 0) {
       string vtkFile="./" + testName + "_" + k + ".vtk";
       int[int] vtkOrder=[1, 1];
