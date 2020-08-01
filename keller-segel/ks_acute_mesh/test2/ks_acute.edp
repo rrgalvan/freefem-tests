@@ -113,6 +113,8 @@ macro intLump(expr) int2d(Th, qft=qf1pTlump) (expr) // EOM
 
 real u0NormHsqr = intLump(u0*u0); // ||u0||_h^2
 real v0NormHsqr = intLump(v0*v0); // ||v0||_h^2
+cout << " ||u0||_h ^2 = " << u0NormHsqr << endl;
+cout << " ||v0||_h ^2 = " << v0NormHsqr << endl;
 
 // Compute discrete laplacian of v0
 Vh v0Laplacian;
@@ -126,7 +128,7 @@ cout << " ||grad(v0)||_L2 ^2 = " << gradv0Norm2sqr << endl;
 real u0v0ProdH = intLump(u0*v0); // (u0,v0)_h
 cout << " (u0,v0)_h= " << u0v0ProdH << endl;
 real logu0u0ProdH = intLump(log(u0)*u0); // (log(u0), u0)_h
-cout << " (log(u0),u0)_h= " << u0v0ProdH << endl;
+cout << " (log(u0),u0)_h= " << logu0u0ProdH << endl;
 real E0 = 0.5*v0NormHsqr + 0.5*gradv0Norm2sqr - u0v0ProdH + logu0u0ProdH;
 cout << "E0 = " << E0 << endl;
 
