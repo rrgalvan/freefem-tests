@@ -30,7 +30,9 @@ if(acuteMesh) {
 fespace Ph(Th, P0);
 Ph hTri = hTriangle;
 real h = hTri[].max;
-cout << "Size of mesh = " << h << endl;
+cout << "Size of mesh:  h=" << h << endl;
+cout << "  number of triangles: " << Th.nt << endl;
+cout << "  number of vertices: " << Th.nv << endl;
 
 //>> Paremeters from G. Viglialoro et al....
 // int nx=20
@@ -226,7 +228,6 @@ real blowUpTolerance=1.e+10;
 for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
   t=t+dt;
   cout << "iter = " << k << "\t (t = " << t << ")" << endl;
-  cout << "  number of vertices: " << Th.nv << endl;
 
   // Mesh adaptivity ····························································
   bool adaptMesh=getARGV("-adaptMesh", 0);

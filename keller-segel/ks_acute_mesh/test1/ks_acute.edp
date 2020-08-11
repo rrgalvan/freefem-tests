@@ -25,12 +25,14 @@ if(acuteMesh) {
  else {
    Th=square(nx, nx, [x-0.5, y-0.5]);
  }
-
 // Mesh size
 fespace Ph(Th, P0);
 Ph hTri = hTriangle;
 real h = hTri[].max;
-cout << "Size of mesh = " << h << endl;
+cout << "Size of mesh:  h=" << h << endl;
+cout << "  number of triangles: " << Th.nt << endl;
+cout << "  number of vertices: " << Th.nv << endl;
+
 
 //>> Paremeters from G. Viglialoro et al....
 // int nx=20
@@ -51,8 +53,8 @@ real k4 = getARGV("-k4", 1.);
 real cteU0 = getARGV("-cu", 10.);
 real cteV0 = getARGV("-cv", 5.);
 cout << "Datos iniciales: cteU0 = " << cteU0 << ", cteV0=" << cteV0 << endl;
-func uInitCond = cteU0*exp(-10*cteU0*(x^2+(y)^2));
-func vInitCond = cteV0*exp(-10*cteV0*(x^2+(y-0.5)^2));
+func uInitCond = cteU0*exp(-0.1*cteU0*(x^2+(y)^2));
+func vInitCond = cteV0*exp(-0.1*cteV0*(x^2+(y-0)^2));
 
 // Finite elements
 fespace Uh(Th, P1);
@@ -89,6 +91,7 @@ cout << "Condici'on CFL: dt = " << dt << ", h ~ " << h <<
   ", k/h ~ " << dt/h << ", k/h^2 ~ " << dt/(h^2) << endl;
 string testName = "KS_" +
   "dt=" + dt + "_nt=" + niter + "_nx=" + nx +
+  "_cu=" + cteU0 + "_cv=" + cteV0 +
   "_k0=" + k0 + "_k1=" + k1 + "_k2=" + k2 + "_k3=" + k3 + "_k4=" + k4;
 cout << "Running test " << testName << endl;
 
@@ -221,7 +224,6 @@ real blowUpTolerance=1.e+10;
 for (int k=1; k<=niter && uMax<blowUpTolerance && vMax<blowUpTolerance; k++) {
   t=t+dt;
   cout << "iter = " << k << "\t (t = " << t << ")" << endl;
-  cout << "  number of vertices: " << Th.nv << endl;
 
   // Mesh adaptivity ····························································
   bool adaptMesh=getARGV("-adaptMesh", 0);

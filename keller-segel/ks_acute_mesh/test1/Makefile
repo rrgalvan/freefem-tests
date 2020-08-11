@@ -1,5 +1,5 @@
 ACUTE=1
-NX=100
+NX=50
 DT=1.e-5
 NT=100
 CU=10
