@@ -1,12 +1,12 @@
 ACUTE=1
 NX=50
-DT=1.e-5
-NT=100
-CU=10
-CV=5
+DT=1.e-6
+NT=400
+CU0=1000
+CV0=0
 
-VTK=1
-OUTNAME="obtuse=$(ACUTE)_nx=$(NX)_dt=$(DT)_nt=$(NT)_cu=$(CU)_cv=$(CV)"
+VTK=5
+OUTNAME="acute=$(ACUTE)_nx=$(NX)_dt=$(DT)_nt=$(NT)_cu0=$(CU0)_cv0=$(CV0)"
 OUTFILE="$(OUTNAME).out"
 OUTDIR="tests/$(OUTNAME)"
 
@@ -23,7 +23,7 @@ help:
 
 test:
 	@echo "Running FreeFem++ test, saving output to $(OUTFILE)"
-	$(FREEFEM) ks_acute.edp -acute $(ACUTE) -nx $(NX) -dt $(DT) -nt $(NT) -cu $(CU) -cv $(CV) -vtk $(VTK) > $(OUTFILE) &
+	$(FREEFEM) ks_acute.edp -acute $(ACUTE) -nx $(NX) -dt $(DT) -nt $(NT) -cu0 $(CU0) -cv0 $(CV0) -vtk $(VTK) > $(OUTFILE) &
 
 
 move:

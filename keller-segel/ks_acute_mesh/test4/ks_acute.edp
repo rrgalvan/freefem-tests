@@ -26,7 +26,7 @@ if(acuteMesh) {
  else {
    Th=square(nx, nx, [x-0.5, y-0.5]);
  }
-plot(Th, wait=true);
+
 // Mesh size
 fespace Ph(Th, P0);
 Ph hTri = hTriangle;
@@ -35,7 +35,6 @@ cout << "Size of mesh:  h=" << h << endl;
 cout << "  number of triangles: " << Th.nt << endl;
 cout << "  number of vertices: " << Th.nv << endl;
 
-
 //>> Paremeters from G. Viglialoro et al....
 // int nx=20
 // mesh Th = square(nx, nx, [4*x-2, 4*y-2]);
@@ -43,20 +42,25 @@ cout << "  number of vertices: " << Th.nv << endl;
 // u0 = 1.15*exp(-x^2-y^2)*(4-x^2)^2*(4-y^2)^2;
 // v0 = 0.55*exp(-x^2-y^2)*(4-x^2)^2*(4-y^2)^2;
 
-//>> Parameters from Y. Epshteyn & A. Kurganov...
-//>> Blow-up expected at t = 1.21·10^{−4}
-// int nx = 50; // Also nx=101
+//>> Parameters from  A. Chertok & A. Kurganov...
+//>> Blow-up conjetured at $t\in [4.4e-5, 1.e-4]$
 // mesh Th = square(nx, nx, [ x-0.5, y-0.5 ]);
 real k0 = getARGV("-k0", 1.);
 real k1 = getARGV("-k1", 1.);
 real k2 = getARGV("-k2", 1.);
 real k3 = getARGV("-k3", 1.);
 real k4 = getARGV("-k4", 1.);
-real cteU0 = getARGV("-cu", 10.);
-real cteV0 = getARGV("-cv", 5.);
-cout << "Datos iniciales: cteU0 = " << cteU0 << ", cteV0=" << cteV0 << endl;
-func uInitCond = cteU0*exp(-cteU0*(x^2+(y)^2));
-func vInitCond = cteV0*exp(-cteV0*(x^2+(y-0.5)^2));
+real cteU0 = getARGV("-cu0", 1000.);
+real cteV0 = getARGV("-cv0",  500.);
+cout << "cteU0 = " << cteU0 << ", cteV0=" << cteV0 << endl;
+func uInitCond = cteU0*exp(-0.1*cteU0*(x^2+y^2));
+func vInitCond = cteV0*exp(-0.1*cteV0*(x^2+y^2));
+
+//>> Parameters from Y. Epshteyn & A. Kurganov...
+//>> Blow-up expected at t = 1.21·10^{−4}
+//real cteU0 = getARGV("-cu0", 1200.);
+//real cteV0 = getARGV("-cv0",  600.);
+
 
 // Finite elements
 fespace Uh(Th, P1);
@@ -93,7 +97,6 @@ cout << "Condici'on CFL: dt = " << dt << ", h ~ " << h <<
   ", k/h ~ " << dt/h << ", k/h^2 ~ " << dt/(h^2) << endl;
 string testName = "obtuseKS_" +
   "dt=" + dt + "_nt=" + niter + "_nx=" + nx +
-  "_cu=" + cteU0 + "_cv=" + cteV0 +
   "_k0=" + k0 + "_k1=" + k1 + "_k2=" + k2 + "_k3=" + k3 + "_k4=" + k4;
 cout << "Running test " << testName << endl;
 

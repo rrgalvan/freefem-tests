@@ -1,3 +1,3 @@
 # Test 3:
-- Blow up test
-- Zero initial condition for v
+- Non blow up test + OBTUSE mesh
+- Chemotaxis from center of square [-1/2, 1/2]^2 to upper edge

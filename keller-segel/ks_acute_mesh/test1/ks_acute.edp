@@ -54,7 +54,7 @@ real cteU0 = getARGV("-cu", 10.);
 real cteV0 = getARGV("-cv", 5.);
 cout << "Datos iniciales: cteU0 = " << cteU0 << ", cteV0=" << cteV0 << endl;
 func uInitCond = cteU0*exp(-cteU0*(x^2+(y)^2));
-func vInitCond = cteV0*exp(-cteV0*(x^2+(y-0)^2));
+func vInitCond = cteV0*exp(-cteV0*(x^2+(y-0.5)^2));
 
 // Finite elements
 fespace Uh(Th, P1);
