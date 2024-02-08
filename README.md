@@ -8,4 +8,6 @@ The theoretical details can be found in [Gutiérrez-Santacreu, J. V., & Rodrígu
 
 A PDF containing latest revised and accepted version can be downloaded from https://arxiv.org/abs/2003.08867
 
-The code is contained in the directory `/keller-segel/ks_acute_mesh`
+The FreeFem++ code for numerical resolution of this model is contained in the directory `/keller-segel/ks_acute_mesh`
+
+## Free software, GNU/GPL license
