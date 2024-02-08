@@ -1,0 +1,68 @@
+// Exact solutiion for 2d steady Stokes equations in the domain
+// [0,1]x[0,1]
+
+real piSquare=pi*pi, pi2 = 2*pi;
+
+func real uExact(real x, real y) {
+  return (cos(pi2*x)-1)*sin(pi2*y);  //
+}
+func real vExact(real x, real y) {
+  return -uExact(y,x);
+}
+func real DXuExact(real x, real y) {
+  return -pi2*sin(pi2*x)*sin(pi2*y);
+}
+func real DXXuExact(real x, real y) {
+  return -4*piSquare*cos(pi2*x)*sin(pi2*y);
+}
+func real DYuExact(real x, real y) {
+  return  pi2*(cos(pi2*x)-1)*cos(pi2*y);
+}
+func real DYYuExact(real x, real y) {
+  return -4*piSquare*(cos(pi2*x)-1)*sin(pi2*y);
+}
+func real DTuExact(real x, real y) {
+  return -uExact(x,y);
+}
+
+func real DXvExact(real x, real y) {
+  return -DYuExact(y,x);
+}
+func real DXXvExact(real x, real y) {
+  return -DYYuExact(y,x);
+}
+func real DYvExact(real x, real y) {
+  return -DXuExact(y,x);
+}
+func real DYYvExact(real x, real y) {
+  return -DXXuExact(y,x);
+}
+func real DTvExact(real x, real y) {
+  return -vExact(x,y);
+}
+
+func real pExact(real x, real y) {
+  return pi2*(sin(pi2*y)+sin(pi2*x));
+}
+func real DXpExact(real x, real y) {
+  return 4*piSquare*cos(pi2*x);
+}
+func real DYpExact(real x, real y) {
+  return 4*piSquare*cos(pi2*y);
+}
+
+
+func real f1Exact(real x, real y) {
+  return  // DTuExact(x,y)		 	// dt(u)
+    -nu*(DXXuExact(x,y)+DYYuExact(x,y))  // - nu*(dxx(u)+dyy(u))
+    + DXpExact(x,y)                   // + dx(p)
+    // + uExact(x,y)*DXuExact(x,y)+ vExact(x,y)*DYuExact(x,y) //+ u dx(u)+ v dy(u)
+    ;
+}
+func real f2Exact(real x, real y) {
+  return  // dEpsilon2*DTvExact(x,y)	 	// dt(v)
+    -nu*dEpsilon2*(DXXvExact(x,y)+DYYvExact(x,y))  	// - (dxx(v)+dyy(v))
+    + DYpExact(x,y)                   		// + dy(p)
+    // + dEpsilon2*(uExact(x,y)*DXvExact(x,y)+ vExact(x,y)*DYvExact(x,y)) //+ u dx(v)+ v dy(v)
+    ;
+}

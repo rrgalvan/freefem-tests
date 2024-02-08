@@ -1,0 +1,281 @@
+// Discontinous Galerlin SIP Method for solve Stokes system
+//
+// Based on [Di Pietro - Ern, Mathematical Aspects of Discontinuous
+// Galerkin Methods], Chapter 6
+//
+// J. Rafael Rodr\'iguez Galv\'an
+
+////////////////
+// Parameters //
+////////////////
+
+verbosity=0;
+int interactive=1; // If 1: plot results
+
+// real SIPPenalty=2.0e+2; // Penalty to achieve coercivity in DG SIP forms
+real SIPPenalty=1.0e+1; // Penalty to achieve coercivity in DG SIP forms
+real nu=0.1;
+real domainEpsilon = 1.e-0; //10^exp;
+real dEpsilon2 = domainEpsilon*domainEpsilon;
+string testDescription="HydStokes_P1P1_sip=" + SIPPenalty + "_eps=" + dEpsilon2;
+
+// macro hFace() (1.0/sqrt(n)) // An approximation of h_F (length of face)
+macro hFace() (lenEdge) // An approximation of h_F (length of face)
+  ;
+
+func uSurface = x*(1-x); // Horizontal surface velocity in cavity test
+// func uSurface=1;
+func f1 = 0; // RHS / u
+func f2 = 0; // RHS / v
+real pEpsilon  = 1.0e-12; // Penalty epsilon in p-equations
+
+int [int] meshSizes= [30];
+
+for(int i=0; i<meshSizes.n; i++) {
+  int n = meshSizes[i];
+  cout << "n=" << n << endl;
+
+  ////////////////////////////////////
+  // Mesh and Finite Element Spaces //
+  ////////////////////////////////////
+
+  // Structured mesh
+  // mesh Th = square(n,n);
+  // int bottom=1, surface=3; int [int] walls = [2,4];
+  // Unstructured mesh
+  real domainX0=0, domainX1=1, domainY0=0, domainY1=1;
+  real ix=domainX1-domainX0, iy=domainY1-domainY0;
+  int walls=100;
+  border bottom(t=0,ix) { x=domainX0+t; y=domainY0;   }
+  border rWall(t=0,iy)  { x=domainX1;   y=domainY0+t; label=walls;}
+  border surface(t=0,ix){ x=domainX1-t; y=domainY1;   }
+  border lWall(t=0,iy)  { x=domainX0;   y=domainY1-t; label=walls;}
+
+  mesh Th=buildmesh( bottom(n) + rWall(n) + surface(n) + lWall(n) );
+
+  int k = 1; // Degree of the polynomials (2 for P2dc ...)
+  assert(k==1); // Assure to change the following lines...
+  func PkDGu = P1dc;  // Discontinuous Pk for pressure
+  func PkDGp = P1dc;  // Discontinuous Pk for pressure
+  func PkCGu = P1b;  // Continous Pk for velocity
+  func PkCGp = P1;  // Continous Pk for pressure
+  int qfo = 2*k+1;  // Order of quadrature formula
+  int qfoP = qfo;  // Order of quadrature formula for pressure integrals
+
+  // Discontinuous FE
+  fespace UhDisc(Th,PkDGu);
+  fespace VhDisc(Th,PkDGu);
+  fespace PhDisc(Th,PkDGp);
+  UhDisc u, ub;
+  VhDisc v, vb;
+  PhDisc p, pb;
+
+  // Continuous FE (for testing)
+  fespace UhCont(Th,PkCGu);
+  fespace VhCont(Th,PkCGu);
+  fespace PhCont(Th,PkCGp);
+  UhCont uu, uub;
+  VhCont vv, vvb;
+  PhCont pp, ppb;
+
+  ////////////
+  // Macros //
+  ////////////
+
+  macro dn(u) (N.x*dx(u)+N.y*dy(u)) //  Normal derivative
+    ;
+  macro grad(u) [dx(u),dy(v)] // EOM
+  macro div(u,v) (dx(u)+dy(v)) // EOM
+    ;
+  // def: jump = external - internal value; on border exter value =0
+  //      average = (external + internal value)/2, on border just internal value
+  NewMacro aSIP(u, ub, viscosity)
+    (
+     int2d(Th) ( viscosity * ( dx(u)*dx(ub) + dy(u)*dy(ub) ) )
+     + intalledges(Th)
+     (
+      - viscosity*( average(dn(u))*jump(ub) + jump(u)*average(dn(ub)) ) /nTonEdge
+      + (SIPPenalty/hFace)*(jump(u)*jump(ub)) // / nTonEdge
+      )
+     ) EndMacro;
+  NewMacro aSIPv(v, vb, viscosity, eps)
+    (
+     int2d(Th) ( eps*viscosity * ( dx(v)*dx(vb) + dy(v)*dy(vb) ) )
+     + intalledges(Th)
+     (
+      - eps*viscosity * ( average(dn(v))*jump(vb) + jump(v)*average(dn(vb)) ) /nTonEdge
+      + eps*(SIPPenalty/hFace)*(jump(v)*jump(vb)) // / nTonEdge
+      + (1-eps)*(SIPPenalty/hFace)*( jump(v*N.y)*jump(vb*N.y) ) // / nTonEdge
+      // + (SIPPenalty/hFace)*(jump(v*N.y)*jump(vb*N.y)) / nTonEdge
+      // + (SIPPenalty/hFace)*( dEpsilon2 * jump(v*N.x)*jump(vb*N.x) / nTonEdge +
+      // 		      jump(v*N.y)*jump(vb*N.y) ) / nTonEdge
+      )
+     ) EndMacro;
+  NewMacro bSIP1(u,v,p)
+    int2d(Th)( -p*(div(u,v)) )
+    EndMacro;
+  NewMacro bSIP2(u,v,p)
+    intalledges(Th)
+    (
+     (jump(u*N.x) + jump(v*N.y))*average(p) // /nTonEdge
+     ) EndMacro;
+  NewMacro sSIP(q,r)
+    intalledges(Th)
+    (
+     (nTonEdge-1)*hFace*jump(q)*jump(r)
+     // hFace*jump(q)*jump(r) /nTonEdge
+     ) EndMacro;
+
+  //////////////////////////////
+  // Variational Formulations //
+  //////////////////////////////
+
+  problem HydStokesSIP([u,v,p], [ub,vb,pb]) =
+    //
+    // 1) Bilinear form (mount all terms)
+    //
+    aSIP(u, ub, nu) + aSIPv(v, vb, nu, dEpsilon2) // Bilinear form a(.,.)
+    + bSIP1(ub,vb,p) + bSIP2(ub,vb,p) // Bilinear form b(.,.)
+    - bSIP1(u,v,pb) - bSIP2(u,v,pb) // Bilinear form b(.,.)
+    + sSIP(p, pb) // Penalización
+    + int2d(Th)(pEpsilon*p*pb)
+    //
+    // 2) Bilinear form a(.,.): remove Dirichlet or Neumann b.c. if not imposed
+    //
+    // 2.1) u on surface, walls & bottom: Dirichlet b.c. (eliminate Neumann terms)
+    - int1d(Th, surface, walls, bottom) (-nu * dn(u)*ub)
+    // 2.2) v on surface & bottom: Dirichlet b.c. (eliminate Neumann terms)
+    - int1d(Th, surface, bottom) ( -nu*dEpsilon2 * dn(v)*vb)
+    // 2.3) v on walls: Neumann b.c. (eliminate Dirichlet terms)
+    - int1d(Th, walls) ( + nu*dEpsilon2 * v*dn(vb)
+    			 + (SIPPenalty/hFace)*(dEpsilon2*(v*N.x)*(vb*N.x)+
+					 (v*N.y)*(vb*N.y)) )
+    //
+    // 3) Boundary conditions from a(.,.)
+    //
+    // 3.1) u on walls: Dirichlet b.c. (u=uSurface)
+    - int1d(Th, surface) (-nu * uSurface*dn(ub)
+    			  + (SIPPenalty/hFace) * uSurface*ub)
+    // 3.1) u on surface & bottom: Dirichlet b.c. (u=0)
+    - int1d(Th, walls, bottom) (-nu * 0.0*dn(ub)
+    				+ (SIPPenalty/hFace) * 0*ub)
+    // 3.3) v on surface & bottom: Dirichlet b.c. (v=0)
+    - int1d(Th, surface, bottom) ( -nu*dEpsilon2 * 0.0*dn(vb)
+    				   + (SIPPenalty/hFace)*(dEpsilon2*(0*N.x)*(vb*N.x)+
+    						   (0*N.y)*(vb*N.y)) )
+    // 3.4) v on walls: Neumann b.c.( dn(v)=0 )
+    - int1d(Th, walls) (-nu*dEpsilon2 * 0*vb)
+
+    //
+    // 4) Bilinear form b(.,.): delete Dirichlet or Neumann b.c. which no are imposed
+    //
+    // 4.1) v on  walls: Neumann b.c. (eliminate Dirichlet terms)
+    + int1d(Th,walls)( p*(ub*N.x+vb*N.y) )
+    // - int1d(Th,walls)(  pb*(u*N.x+v*N.y) )
+
+    // 4.2) Boundary conditions from b(.,.)
+    // + int1d(Th,walls) ( pb*0.0*N.x )
+    ;
+
+  problem HydStokes([uu,vv,pp], [uub,vvb,ppb]) =
+    int2d(Th) (
+	       + nu * ( dx(uu)*dx(uub) + dy(uu)*dy(uub) )
+	       + nu*dEpsilon2 * ( dx(vv)*dx(vvb) + dy(vv)*dy(vvb) )
+	       - pp*dx(uub) - pp*dy(vvb)
+	       + dx(uu)*ppb + dy(vv)*ppb
+	       + nu*div(uu,vv)*dy(vvb) // dz(v) stabilization term
+	       + pEpsilon*pp*ppb
+	       )
+    + on(surface, uu=uSurface, vv=0)
+    + on(walls, uu=0)
+    + on(bottom, uu=0, vv=0);
+    ;
+
+  //////////////
+  // Solve DG //
+  //////////////
+  real time0, time1;
+  time0 = clock();
+  HydStokesSIP;
+  // Force zero mean
+  bool forceZeroMean=false; if(forceZeroMean) {
+    real pMean = int2d(Th)(p)/int2d(Th)(1.0);
+    p = p - pMean;
+  }
+  time1 = clock();
+  cout << "DG SIP time: " << time1-time0 << " << [SIP-DG]"<< endl;
+  if(interactive) plot(p,[u,v],cmm="Discontinuous Galerkin p, (u,v)",wait=1,value=1,fill=1);
+  if(interactive) plot(u,cmm="Discontinuous Galerkin, u",wait=1,value=1,fill=1);
+  if(interactive) plot(v,cmm="Discontinuous Galerkin, v",wait=1,value=1,fill=1);
+  if(interactive) plot(p,cmm="Discontinuous Galerkin, p",wait=1,value=1,fill=1);
+  // if(interactive) plot(p,cmm="Discontinuous Galerkin",wait=1,value=1,fill=1);
+
+  //////////////
+  // Solve CG //
+  //////////////
+  time0 = clock();
+  HydStokes;
+  // Force zero mean
+  if(forceZeroMean) {
+    real pMean = int2d(Th)(pp)/int2d(Th)(1.0);
+    pp = pp - pMean;
+  }
+  time1 = clock();
+  cout << "CG time:     " << time1-time0 << endl;
+  if(interactive) plot(pp,[uu,vv],cmm="Continuous Galekin p, (u,v)",wait=1,value=1,fill=1);
+  if(interactive) plot(uu,cmm="Continuous Galekin, u",wait=1,value=1,fill=1);
+  if(interactive) plot(vv,cmm="Continuous Galekin, v",wait=1,value=1,fill=1);
+  if(interactive) plot(pp,cmm="Continuous Galekin, p",wait=1,value=1,fill=1);
+  // if(interactive) plot(pp,cmm="Continuous Galekin",wait=1,value=1,fill=1);
+
+  // cout << "Residual (DG): " << int2d(Th,qforder=qfo)(dx(u)*dx(u) +
+  // dy(u)*dy(u) - int2d(Th)(f*u)) << endl;
+  // cout << "Residual (CG): " << int2d(Th)(dx(uu)*dx(uu) +
+  // dy(uu)*dy(uu) - int2d(Th)(f*uu)) << endl;
+
+  real divDG = sqrt(int2d(Th)(div(u,v)*div(u,v)));
+  real divCG = sqrt(int2d(Th)(div(uu,vv)*div(uu,vv)));
+  cout << " Divergence (L2 norm)............ " << divDG
+       << " (CG case: " << divCG << ")" << endl;
+  real kinDG = 0.5*sqrt(int2d(Th)(square(u)+square(v)));
+  real kinCG = 0.5*sqrt(int2d(Th)(square(uu)+square(vv)));
+  cout << " Kinetic Energy.................. " << kinDG
+       << " (CG case: " << kinCG << ")" << endl;
+  real pDG = sqrt(int2d(Th)(square(dy(p))));
+  real pCG = sqrt(int2d(Th)(square(dy(pp))));
+  cout << " Pressure (dz(p), L2 norm)....... " << pDG
+       << " (CG case: " << pCG << ")" << endl;
+
+  cout << "Boundary conditions (L2 residuals):" << endl;
+  real errUsurf = sqrt(int1d(Th,surface)(square(u-uSurface)));
+  real errUwalls = sqrt(int1d(Th,walls)(square(u-0)));
+  real errUbottom = sqrt(int1d(Th,bottom)(square(u-0)));
+  cout << "  * u on surface: " << errUsurf << endl;
+  cout << "  * u on walls: "  << errUwalls << endl;
+  cout << "  * u on bottom: " << errUbottom << endl;
+  real errVsurf = sqrt(int1d(Th,surface)(square(v-0)));
+  real errDNVwalls = sqrt(int1d(Th,walls)(square(dn(v))));
+  real vWalls = sqrt(int1d(Th,walls)(square(v)));
+  real errVbottom = sqrt(int1d(Th,bottom)(square(v-0)));
+  cout << "  * v on surface: " << errVsurf << endl;
+  cout << "  * dn(v) on walls: "  << errDNVwalls << endl;
+  cout << "     * ||v||_0 on walls: " << vWalls << endl;
+  cout << "  * v on bottom: " << errVbottom << endl;
+
+  int[int] orders = [1,1];
+  bool saveVTK=true; if(saveVTK) {
+    load "iovtk";
+    savevtk("/tmp/DG" + testDescription + "_n=" + n + ".vtk",
+	    Th,
+	    [u,v,0],
+	    p,
+	    dataname="Velocity_DG_eps=" + domainEpsilon
+	    + " Pressure_DG_eps=" + dEpsilon2); //, order=orders) ;
+    savevtk("/tmp/CG" + testDescription + "_n=" + n + ".vtk",
+	    Th,
+	    [uu,vv,0],
+	    pp,
+	    dataname="Velocity_CG_eps=" + domainEpsilon
+	    + " Pressure_CG_eps=" + dEpsilon2); //, order=orders) ;
+  }
+ }

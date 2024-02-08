@@ -1,0 +1,270 @@
+// Discontinous Galerlin SIP Method for solve Stokes system
+//
+// Based on [Di Pietro - Ern, Mathematical Aspects of Discontinuous
+// Galerkin Methods], Chapter 6
+//
+// J. Rafael Rodr\'iguez Galv\'an
+
+// load "MUMPS_FreeFem"
+load "UMFPACK64"; // To avoid "UMFPACK ERROR: out of memory"
+
+load "Element_P3"
+load "Element_P4"
+load "Element_P3dc"
+load "Element_P4dc"
+
+////////////////
+// Parameters //
+////////////////
+
+verbosity=0;
+int interactive=0; // If 1: plot results
+
+real SIPPenalty=5.0e+1; // DG Penalty (to achieve coercivity)
+real nu=1.; // Horizontal viscosity coefficient
+
+real domainEpsilon = 1.e-0; //1.e-7; // Domain Epsilon
+real dEpsilon2 = domainEpsilon*domainEpsilon;
+
+// macro hFace() (1.0/sqrt(n)) // An approximation of h_F (length of face)
+macro hFace() (lenEdge) // An approximation of h_F (length of face)
+  ;
+macro LocalPenalty() (SIPPenalty/hFace) // EOM
+  ;
+
+include "exact-sol-HydStokes-steady.idp"
+func f1 = f1Exact; // RHS / u
+func f2 = f2Exact; // RHS / v
+real pEpsilon  = 1.0e-9; // Penalty epsilon in p-equations
+
+real[int] uErrL2(2), uErrH1(2), vErrL2(2), vErrH1(2), pErrL2(2); // Errors in 2 time steps (for orders)
+real[int] uuErrL2(2), uuErrH1(2), ppErrL2(2); // Errors in 2 time steps (for orders)
+
+int [int] meshSizes= [8,16,32,64];
+
+for(int i=0; i<meshSizes.n; i++) {
+  int n = meshSizes[i];
+  cout << "n=" << n << endl;
+
+  ////////////////////////////////////
+  // Mesh and Finite Element Spaces //
+  ////////////////////////////////////
+  mesh Th = square(n,n);
+  int bottom=1, surface=3; int [int] walls = [2,4];
+
+  int k = 1; // Degree of the polynomials (2 for P2dc ...)
+  assert(k==1); // Assure to change the following lines...
+  func PkDGu = P1dc;  // Discontinuous Pk for pressure
+  func PkDGp = P1dc;  // Discontinuous Pk for pressure
+  func PkCGu = P1b;  // Continous Pk for velocity
+  func PkCGp = P1;  // Continous Pk for pressure
+  int qfo = 2*k;  // Order of quadrature formula
+  int qfoP = qfo;  // Order of quadrature formula for pressure integrals
+
+  // Discontinuous FE
+  fespace UhDisc(Th,PkDGu);
+  fespace VhDisc(Th,PkDGu);
+  fespace PhDisc(Th,PkDGp);
+  UhDisc u, ub;
+  VhDisc v, vb;
+  PhDisc p, pb;
+
+  // Continuous FE (for testing)
+  fespace UhCont(Th,PkCGu);
+  fespace VhCont(Th,PkCGu);
+  fespace PhCont(Th,PkCGp);
+  UhCont uu, uub;
+  VhCont vv, vvb;
+  PhCont pp, ppb;
+
+  ////////////
+  // Macros //
+  ////////////
+
+  macro dn(u) (N.x*dx(u)+N.y*dy(u)) //  Normal derivative
+    ;
+  macro div(u,v) (dx(u)+dy(v)) // EOM
+    ;
+  // def: jump = external - internal value; on border exter value =0
+  //      average = (external + internal value)/2, on border just internal value
+  NewMacro aUSIP(u,ub)
+    (
+     int2d(Th) ( nu * ( dx(u)*dx(ub) + dy(u)*dy(ub) ) )
+     + intalledges(Th)
+     (
+      - nu*( average(dn(u))*jump(ub) + jump(u)*average(dn(ub)) ) /nTonEdge
+      + LocalPenalty*(jump(u)*jump(ub))/nTonEdge
+      )
+     ) EndMacro;
+  NewMacro aVSIP(v,vb)
+    (
+     int2d(Th) ( nu*dEpsilon2 * ( dx(v)*dx(vb) + dy(v)*dy(vb) ) )
+     + intalledges(Th)
+     (
+      // dEpsilon2*PenaltyParameter*(jump(v)*jump(vb)) /nTonEdge
+      nu*dEpsilon2*( average(dn(v))*jump(vb) + jump(v)*average(dn(vb)) ) /nTonEdge
+      + (LocalPenalty)*(jump(v)*jump(vb))/nTonEdge
+      )
+     ) EndMacro;
+  NewMacro bSIP1(u,v,p)
+    int2d(Th)( -p*(div(u,v)) )
+    EndMacro;
+  NewMacro bSIP2(u,v,p)
+    intalledges(Th)
+    (
+     (jump(u)*N.x + jump(v)*N.y)*average(p) /nTonEdge
+     ) EndMacro;
+  NewMacro sSIP(q,r)
+    intalledges(Th)
+    (
+     (nTonEdge-1)*hFace*jump(q)*jump(r)
+     ) EndMacro;
+
+  //////////////////////////////
+  // Variational Formulations //
+  //////////////////////////////
+
+  problem HydStokesSIP([u,v,p], [ub,vb,pb]) =
+    aUSIP(u,ub) + aVSIP(v,vb) // Bilinear form a(.,.)
+    + bSIP1(ub,vb,p) + bSIP2(ub,vb,p) // Bilinear form b(.,.)
+    - bSIP1(u,v,pb) - bSIP2(u,v,pb) // Bilinear form b(.,.)
+    + sSIP(p, pb) // Stabilization
+    + int2d(Th)(pEpsilon*p*pb)
+    - int2d(Th)
+    (
+     + f1(x,y) * ub
+     + f2(x,y) * vb
+     )
+    + int1d(Th, bottom, walls, surface)
+    ( // Dirichlet condition (imposee de maniere faible)
+     uExact(x,y)*(dn(ub)-LocalPenalty*ub)
+     + dEpsilon2*vExact(x,y)*(dn(vb)-LocalPenalty*vb)
+     )
+    // + int1d(Th, surface) //, bottom, walls)
+    // (
+    //  - nu*(u*dn(ub) ) //+ v*dn(vb))
+    //  // + BoundaryPenalty/hFace*(u*ub + v*vb)
+    //  )
+    // // RHS //
+    // + int1d(Th, surface)
+    // (
+    //  + nu*uSurface*dn(ub)
+    //  // - (BoundaryPenalty/hFace)*uSurface*ub
+    //  )
+    // - int1d(Th, surface)
+    // (
+    //  (LocalPenalty)*uSurface*ub
+    //  )
+    // + on(bottom,  u=uExact(x,y), v=vExact(x,y))
+    // + on(walls,   u=uExact(x,y), v=vExact(x,y))
+    // + on(surface, u=uExact(x,y), v=vExact(x,y))
+    ;
+
+  problem HydStokes([uu,vv,pp], [uub,vvb,ppb]) =
+    int2d(Th) (
+	       + nu * ( dx(uu)*dx(uub) + dy(uu)*dy(uub) )
+	       + nu*dEpsilon2 * ( dx(vv)*dx(vvb) + dy(vv)*dy(vvb) )
+	       - pp*dx(uub) - pp*dy(vvb)
+	       + dx(uu)*ppb + dy(vv)*ppb
+	       + nu*div(uu,vv)*dy(vvb) // dz(v) stabilization term
+	       + pEpsilon*pp*ppb
+	       )
+    - int2d(Th) (
+		 + f1(x,y) * uub
+		 + f2(x,y) * vvb
+		 )
+    // + int1d(Th, bottom, walls, surface)
+    // (
+    //  uExact(x,y)*(dn(uub)-PenaltyParameter*uub) // Dirichlet condition (imposee de maniere faible)
+    //  + vExact(x,y)*(dn(vvb)-PenaltyParameter*vvb) // Dirichlet condition (imposee de maniere faible)
+    //  );
+    + on(bottom,  uu=uExact(x,y), vv=vExact(x,y))
+    + on(walls,   uu=uExact(x,y), vv=vExact(x,y))
+    + on(surface, uu=uExact(x,y), vv=vExact(x,y));
+
+  //////////////
+  // Solve DG //
+  //////////////
+  real time0, time1;
+  time0 = clock();
+  HydStokesSIP;
+  // Force zero mean
+  bool forceZeroMean=true; if(forceZeroMean) {
+    real pMean = int2d(Th)(p)/int2d(Th)(1.0);
+    p = p - pMean;
+  }
+  time1 = clock();
+  cout << "DG SIP time: " << time1-time0 << " << [SIP-DG]"<< endl;
+  if(interactive) plot(v,cmm="Discontinuous Galerkin Vertical Velocity",wait=1,value=1,fill=1);
+  if(interactive) plot(p,cmm="Discontinuous Galerkin Pressure",wait=1,value=1,fill=1);
+
+  //////////////
+  // Solve CG //
+  //////////////
+  time0 = clock();
+  HydStokes;
+  time1 = clock();
+  cout << "CG time:     " << time1-time0 << endl;
+  if(interactive) plot(pp,cmm="Continuous Galerkin Pressure",wait=1,value=1,fill=1);
+
+  // cout << "Residual (DG): " << int2d(Th)(dx(u)*dx(u) +
+  // dy(u)*dy(u) - int2d(Th)(f*u)) << endl;
+  // cout << "Residual (CG): " << int2d(Th)(dx(uu)*dx(uu) +
+  // dy(uu)*dy(uu) - int2d(Th)(f*uu)) << endl;
+
+  // // Vh error = u-uExact;
+  // real uError = sqrt(int2d(Th)(square(dx(u)-DXuExact(x,y))));
+  // real vError = sqrt(int2d(Th)(square(dy(v)-DYvExact(x,y))));
+  // real pError = sqrt(int2d(Th)(square(p-pExact(x,y))));
+  // cout << "DG u,v/p error L2: " << uError << "," << vError << "/" << pError << "<<***" << endl;
+  // real uuError = sqrt(int2d(Th)(square(dx(uu)-DXuExact(x,y))));
+  // real vvError = sqrt(int2d(Th)(square(dy(vv)-DYvExact(x,y))));
+  // real ppError = sqrt(int2d(Th)(square(pp-pExact(x,y))));
+  // cout << "CG u,v/p error L2: " << uuError << "," << vvError << "/" << ppError << endl;
+
+  bool saveVTK=true; if(saveVTK) {
+    load "iovtk";
+    savevtk("/tmp/DGsolution" + n + ".vtk",
+  	    Th,
+  	    [u,v,0],
+  	    p,
+  	    dataname="Velocity Pressure") ;
+    savevtk("/tmp/CGsolution" + n + ".vtk",
+  	    Th,
+  	    [uu,vv,0],
+  	    pp,
+  	    dataname="Velocity Pressure") ;
+    savevtk("/tmp/EXACTsolution" + n + ".vtk",
+  	    Th,
+  	    [uExact(x,y),vExact(x,y),0],
+  	    pExact(x,y),
+  	    dataname="ExactV ExactP") ;
+  }
+
+  uErrL2[1] = sqrt(int2d(Th)(square(u-uExact(x,y))));
+  uErrH1[1] = sqrt(int2d(Th)(square(dx(u)-DXuExact(x,y))));
+  vErrL2[1] = sqrt(int2d(Th)(square(v-vExact(x,y))));
+  vErrH1[1] = sqrt(int2d(Th)(square(dx(v)-DXvExact(x,y))));
+  pErrL2[1] = sqrt(int2d(Th)(square(p-pExact(x,y))));
+  cout << "DG u,v/p error L2: " << uErrL2[1] << "," << vErrL2[1] << "/" << pErrL2[1] << "<<***" << endl;
+  cout << "DG u,v error H1: " << uErrH1[1] << "," << vErrH1[1]  << endl;
+  uuErrL2[1] = sqrt(int2d(Th)(square(uu-uExact(x,y))) + int2d(Th)(square(vv-vExact(x,y))));
+  uuErrH1[1] = sqrt(int2d(Th)(square(dx(uu)-DXuExact(x,y))) + int2d(Th)(square(dy(uu)-DYuExact(x,y))));
+  ppErrL2[1] = sqrt(int2d(Th)(square(pp-pExact(x,y))));
+  cout << "CG u/p error L2: " << uuErrL2[1] << "/" << ppErrL2[1] << endl;
+
+  if(i>0) { // Compute error orders
+    cout << "Convergence rates... " << endl <<
+      " * u, L2 :"   << log(uErrL2[0]/uErrL2[1])/log(2.) << endl <<
+      " * u, H1 :"   << log(uErrH1[0]/uErrH1[1])/log(2.) << endl <<
+      " * v, L2 :"   << log(vErrL2[0]/vErrL2[1])/log(2.) << endl <<
+      " * v, H1 :"   << log(vErrH1[0]/vErrH1[1])/log(2.) << endl <<
+      " * p, L2 :"   << log(pErrL2[0]/pErrL2[1])/log(2.) << endl <<
+      endl;
+  }
+  uErrL2[0] = uErrL2[1];
+  uErrH1[0] = uErrH1[1];
+  vErrL2[0] = vErrL2[1];
+  vErrH1[0] = vErrH1[1];
+  pErrL2[0] = pErrL2[1];
+ }
